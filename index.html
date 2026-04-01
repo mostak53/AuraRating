@@ -6,34 +6,1215 @@
 <title>AuraScore — Human Face Rating System</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet"/>
 
-<!-- ══════════════════════════════════════════════
-     FIREBASE SDK  (free Firestore — no server needed)
-     Replace the firebaseConfig below with YOUR OWN
-     project config from console.firebase.google.com
-     Free plan: 50 000 reads + 20 000 writes per day
-═══════════════════════════════════════════════ -->
-<script type="module">
-import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, doc, getDoc, getDocs,
-         setDoc, deleteDoc, updateDoc, query, where,
-         serverTimestamp, onSnapshot }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL, deleteObject }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+<!--
+╔══════════════════════════════════════════════════════════════╗
+║          HOW TO CONNECT FIREBASE (100% FREE)                 ║
+║  ① Go to https://console.firebase.google.com                 ║
+║  ② Create a new project (disable Analytics)                  ║
+║  ③ Left menu → Build → Firestore Database                    ║
+║     → Create database → Start in TEST MODE → Done            ║
+║     ⚠ DO NOT enable Storage — we don't need it!              ║
+║  ④ Gear icon ⚙ → Project Settings → General tab              ║
+║     → "Your apps" → click </> → Register app                 ║
+║     → Copy the firebaseConfig object                         ║
+║  ⑤ Paste your config into FIREBASE CONFIG below              ║
+║  ⑥ Set USE_FIREBASE = true                                    ║
+║  Done! All users now share one live database. FREE forever.   ║
+╚══════════════════════════════════════════════════════════════╝
 
-/* ──────────────────────────────────────────────
-   🔴 STEP 1: Replace this config with your own!
-   Go to: console.firebase.google.com
-   → New project → Firestore Database (test mode)
-   → Storage (test mode) → Project Settings → SDK
-   ────────────────────────────────────────────── */
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+  FREE QUOTA (Spark plan):
+  • 50,000 reads  / day
+  • 20,000 writes / day
+  • 1 GB storage  (we store compressed images as base64 in Firestore)
+  • No credit card required
+-->
 
-// Your web app's Firebase configuration
+<style>
+/* ── VARIABLES ── */
+:root{
+  --bg:#0a0a0f; --bg2:#111118;
+  --surface:#1e1e28; --border:#2a2a38;
+  --accent:#c9a96e; --accent2:#e8c98a;
+  --text:#e8e4dc; --text2:#9a9490; --text3:#5a5660;
+  --danger:#e06060; --success:#60c080;
+  --star:#f0c040; --star-e:#2e2e3a;
+  --r:12px; --tr:.3s cubic-bezier(.4,0,.2,1); --nh:60px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:3000;height:var(--nh);display:flex;align-items:center;justify-content:space-between;padding:0 26px;background:rgba(10,10,15,.95);backdrop-filter:blur(18px);border-bottom:1px solid var(--border);}
+.logo{font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;color:var(--accent);cursor:pointer;letter-spacing:.05em;flex-shrink:0;}
+.nc{display:flex;gap:22px;list-style:none;}
+.nc a{font-size:.77rem;letter-spacing:.09em;text-transform:uppercase;color:var(--text2);text-decoration:none;cursor:pointer;padding:4px 0;border-bottom:1px solid transparent;transition:all var(--tr);}
+.nc a:hover{color:var(--accent);border-bottom-color:rgba(201,169,110,.4);}
+.nr{display:flex;gap:8px;align-items:center;}
+#nav-uinfo{font-size:.74rem;color:var(--text2);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;}
+.bnav{padding:6px 15px;border-radius:6px;font-size:.74rem;font-family:'DM Sans',sans-serif;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);letter-spacing:.06em;text-transform:uppercase;transition:all var(--tr);white-space:nowrap;}
+.bnav:hover{border-color:var(--accent);color:var(--accent);}
+.bnav.g{background:var(--accent);border-color:var(--accent);color:#0a0a0f;font-weight:500;}
+.bnav.g:hover{background:var(--accent2);}
+/* hamburger */
+.ham{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:6px;flex-shrink:0;}
+.ham span{display:block;width:20px;height:2px;background:var(--text2);border-radius:2px;transition:all .28s;}
+.ham.open span:nth-child(1){transform:rotate(45deg) translate(5px,5px);}
+.ham.open span:nth-child(2){opacity:0;}
+.ham.open span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px);}
+/* mobile drawer */
+.drawer{display:none;position:fixed;top:var(--nh);left:0;right:0;z-index:2999;background:rgba(10,10,15,.98);border-bottom:1px solid var(--border);padding:14px 18px 22px;flex-direction:column;}
+.drawer.open{display:flex;}
+.drawer a{font-size:.86rem;letter-spacing:.07em;text-transform:uppercase;color:var(--text2);cursor:pointer;padding:12px 4px;border-bottom:1px solid rgba(42,42,56,.5);transition:color var(--tr);}
+.drawer a:last-of-type{border-bottom:none;}
+.drawer a:hover{color:var(--accent);}
+.mob-btns{display:flex;gap:8px;margin-top:12px;}
+.mob-btns button{flex:1;}
+.mob-urow{display:none;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+.mob-urow span{font-size:.78rem;color:var(--text2);flex:1;}
+
+/* ── PAGES ── */
+.page{display:none;min-height:100vh;padding-top:var(--nh);}
+.page.active{display:block;}
+
+/* ── LANDING ── */
+#pg-land{background:radial-gradient(ellipse 80% 60% at 50% -10%,#2a1f0a 0%,var(--bg) 60%);}
+.hero{min-height:calc(100vh - var(--nh));display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:56px 20px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;inset:0;background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23c9a96e' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");pointer-events:none;}
+.badge{display:inline-block;padding:5px 15px;border-radius:20px;border:1px solid rgba(201,169,110,.3);background:rgba(201,169,110,.08);font-size:.69rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:20px;}
+.hero h1{font-family:'Cormorant Garamond',serif;font-size:clamp(2.1rem,7vw,5rem);font-weight:300;line-height:1.06;color:var(--text);}
+.hero h1 em{font-style:italic;color:var(--accent);}
+.hero p{font-size:.94rem;color:var(--text2);max-width:430px;line-height:1.82;margin:16px auto 30px;}
+.bcta{padding:13px 38px;border-radius:8px;background:var(--accent);color:#0a0a0f;font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;border:none;cursor:pointer;transition:all var(--tr);box-shadow:0 0 40px rgba(201,169,110,.22);}
+.bcta:hover{background:var(--accent2);box-shadow:0 0 60px rgba(201,169,110,.38);transform:translateY(-2px);}
+.hscroll{margin-top:42px;color:var(--text3);font-size:.69rem;letter-spacing:.1em;text-transform:uppercase;}
+.hscroll span{display:block;width:1px;height:32px;background:var(--border);margin:7px auto 0;}
+.isec{padding:68px 38px;max-width:1080px;margin:0 auto;}
+.slbl{font-size:.67rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:11px;}
+.isec h2{font-family:'Cormorant Garamond',serif;font-size:clamp(1.65rem,4vw,2.8rem);font-weight:300;color:var(--text);margin-bottom:16px;line-height:1.15;}
+.igrid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:32px;}
+.icard2{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:24px;transition:border-color var(--tr);}
+.icard2:hover{border-color:rgba(201,169,110,.4);}
+.icard2 .cn{font-family:'Cormorant Garamond',serif;font-size:1.95rem;font-weight:300;color:var(--accent);opacity:.5;margin-bottom:11px;line-height:1;}
+.icard2 h3{font-size:.9rem;font-weight:500;margin-bottom:6px;}
+.icard2 p{font-size:.82rem;color:var(--text2);line-height:1.7;}
+.divider{height:1px;background:var(--border);margin:0 38px;}
+.agrid{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;margin-top:28px;}
+.astat{display:flex;flex-direction:column;gap:3px;border-left:2px solid var(--accent);padding-left:15px;margin-bottom:20px;}
+.astat-n{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:300;color:var(--accent);}
+.astat-l{font-size:.77rem;color:var(--text2);}
+
+/* ── AUTH ── */
+#pg-auth{background:radial-gradient(ellipse 60% 50% at 50% 0%,#1a150a 0%,var(--bg) 70%);}
+.auth-inner{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - var(--nh));padding:24px 14px;}
+.auth-wrap{width:100%;max-width:410px;}
+.atabs{display:flex;gap:3px;margin-bottom:22px;background:var(--bg2);border-radius:10px;padding:3px;border:1px solid var(--border);}
+.atab{flex:1;padding:9px 4px;text-align:center;border-radius:7px;cursor:pointer;font-size:.74rem;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);transition:all var(--tr);}
+.atab.active{background:var(--surface);color:var(--text);}
+.acard{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:30px;}
+.acard h2{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300;margin-bottom:4px;}
+.acard>p{font-size:.8rem;color:var(--text2);margin-bottom:20px;}
+.fg{margin-bottom:13px;}
+.fg label{display:block;font-size:.71rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:6px;}
+.fg input{width:100%;padding:10px 12px;border-radius:7px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:.87rem;outline:none;transition:border-color var(--tr);}
+.fg input:focus{border-color:var(--accent);}
+.bsub{width:100%;padding:12px;border-radius:7px;background:var(--accent);color:#0a0a0f;font-family:'DM Sans',sans-serif;font-size:.85rem;font-weight:500;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;margin-top:5px;transition:all var(--tr);}
+.bsub:hover{background:var(--accent2);transform:translateY(-1px);}
+.bsub:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.amsg{margin-top:9px;font-size:.77rem;text-align:center;min-height:15px;}
+.amsg.err{color:var(--danger);}
+.amsg.ok{color:var(--success);}
+
+/* ── DB STATUS BAR ── */
+.dbbar{display:flex;align-items:center;gap:8px;padding:6px 14px;font-size:.72rem;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:var(--nh);z-index:99;}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.dot.green{background:#60c080;}
+.dot.yellow{background:#c9a96e;animation:pulse 1.5s ease infinite;}
+.dot.red{background:#e06060;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+/* ── USER RATING PAGE ── */
+#pg-rate{background:var(--bg);}
+.utabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:var(--nh);z-index:100;overflow-x:auto;}
+.utab2{padding:12px 22px;font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all var(--tr);white-space:nowrap;flex-shrink:0;}
+.utab2:hover{color:var(--text2);}
+.utab2.active{color:var(--accent);border-bottom-color:var(--accent);}
+.usec{display:none;}
+.usec.active{display:block;}
+/* rate header */
+.rh{padding:26px 26px 10px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:11px;}
+.rh h2{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:300;}
+.srow2{display:flex;gap:7px;flex-wrap:wrap;}
+.spill{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:4px 13px;font-size:.72rem;color:var(--text2);}
+.spill b{color:var(--accent);}
+/* photo grid */
+.pgrid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:12px;padding:10px 26px 56px;}
+.pc{position:relative;border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid var(--border);cursor:default;transition:all var(--tr);aspect-ratio:3/4;}
+.pc:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:0 10px 36px rgba(0,0,0,.5);}
+.pc img{width:100%;height:100%;object-fit:cover;display:block;transition:transform var(--tr),filter var(--tr);filter:brightness(.87);}
+.pc:hover img{transform:scale(1.04);filter:brightness(1);}
+.cov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.08) 52%,transparent 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:12px;transition:opacity var(--tr);}
+@media(hover:hover){.cov{opacity:0;} .pc:hover .cov{opacity:1;}}
+.cn2{font-size:.74rem;font-weight:500;color:var(--text);margin-bottom:5px;}
+.sr{display:flex;gap:5px;}
+.star{font-size:1.3rem;cursor:pointer;color:var(--star-e);transition:color .1s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent;line-height:1;}
+.star.lit{color:var(--star);}
+.rbadge{position:absolute;top:7px;right:7px;background:rgba(201,169,110,.92);color:#0a0a0f;font-size:.64rem;font-weight:700;padding:2px 7px;border-radius:10px;}
+.ph{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#191924,#1e1e2c);color:var(--text3);font-size:2rem;}
+.ph small{font-size:.68rem;margin-top:5px;color:var(--text3);text-align:center;padding:0 8px;}
+/* my ratings */
+.mrh{padding:26px 26px 10px;}
+.mrh h2{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:300;margin-bottom:3px;}
+.mrh p{font-size:.78rem;color:var(--text2);}
+.mrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:12px;padding:10px 26px 56px;}
+.mc{position:relative;border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid rgba(201,169,110,.2);aspect-ratio:3/4;transition:border-color var(--tr);}
+.mc:hover{border-color:var(--accent);}
+.mc img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.75);}
+.mi{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.95) 0%,transparent 55%);display:flex;flex-direction:column;justify-content:flex-end;padding:12px;}
+.mname{font-size:.74rem;font-weight:500;color:var(--text);margin-bottom:2px;}
+.mangle{font-size:.64rem;color:var(--text3);margin-bottom:5px;}
+.mbig{font-size:1rem;color:var(--star);letter-spacing:1px;margin-bottom:6px;}
+.elbl{font-size:.59rem;color:var(--accent);letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px;}
+.esr{display:flex;gap:3px;}
+.esr .star{font-size:1.05rem;}
+
+/* ── ADMIN ── */
+#pg-admin{background:var(--bg);}
+.admin-wrap{display:grid;grid-template-columns:205px 1fr;min-height:calc(100vh - var(--nh));}
+.aside{background:var(--bg2);border-right:1px solid var(--border);padding:22px 11px;}
+.aside h3{font-size:.63rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);margin-bottom:11px;padding-left:7px;}
+.slink{display:flex;align-items:center;gap:8px;padding:9px 9px;border-radius:7px;cursor:pointer;font-size:.79rem;color:var(--text2);transition:all var(--tr);margin-bottom:3px;}
+.slink:hover,.slink.on{background:var(--surface);color:var(--text);}
+.slink.on{color:var(--accent);}
+.acont{padding:28px;}
+.apnl{display:none;}
+.apnl.active{display:block;}
+.apnl>h2{font-family:'Cormorant Garamond',serif;font-size:1.75rem;font-weight:300;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.scards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:11px;margin-bottom:22px;}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:18px;}
+.sc-n{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;color:var(--accent);}
+.sc-l{font-size:.72rem;color:var(--text2);margin-top:3px;}
+/* upload */
+.uform{display:grid;gap:11px;max-width:450px;margin-bottom:14px;}
+.uform .fg{margin-bottom:0;}
+.prev-img{max-width:150px;border-radius:7px;border:1px solid var(--border);margin-top:10px;display:none;}
+.size-warn{font-size:.72rem;color:var(--accent);margin-top:4px;display:none;}
+/* manage photos */
+.mpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:9px;margin-top:14px;}
+.mpc{position:relative;border-radius:7px;overflow:hidden;border:1px solid var(--border);aspect-ratio:3/4;background:var(--surface);}
+.mpc img{width:100%;height:100%;object-fit:cover;}
+.delbtn{position:absolute;top:4px;right:4px;background:rgba(224,96,96,.92);color:#fff;border:none;border-radius:50%;width:21px;height:21px;font-size:.65rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.clabel{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.78);padding:4px 6px;font-size:.63rem;color:var(--text2);}
+/* table */
+.dt{width:100%;border-collapse:collapse;margin-top:11px;}
+.dt th{text-align:left;padding:8px 10px;font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);}
+.dt td{padding:9px 10px;font-size:.79rem;color:var(--text2);border-bottom:1px solid rgba(42,42,56,.5);}
+.dt tr:hover td{background:var(--surface);}
+.sd{color:var(--star);letter-spacing:2px;}
+.bexp{padding:8px 19px;border-radius:7px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'DM Sans',sans-serif;font-size:.75rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:all var(--tr);}
+.bexp:hover{background:var(--accent);color:#0a0a0f;}
+
+/* ── SPINNER ── */
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle;}
+@keyframes sp{to{transform:rotate(360deg);}}
+.loading-card{grid-column:1/-1;display:flex;align-items:center;justify-content:center;padding:60px;gap:10px;color:var(--text3);font-size:.85rem;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--surface);border:1px solid var(--accent);color:var(--text);padding:9px 19px;border-radius:8px;font-size:.79rem;z-index:9999;transition:transform .4s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;max-width:92vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* ── RESPONSIVE ── */
+@media(max-width:860px){
+  nav{padding:0 14px;}
+  .nc{display:none;}
+  #nav-right-desk{display:none;}
+  .ham{display:flex;}
+  .admin-wrap{grid-template-columns:1fr;}
+  .aside{border-right:none;border-bottom:1px solid var(--border);padding:10px;display:flex;flex-wrap:wrap;gap:4px;}
+  .aside h3{width:100%;margin-bottom:3px;}
+  .slink{font-size:.72rem;padding:7px 9px;}
+  .acont{padding:18px 12px;}
+  .isec{padding:52px 16px;}
+  .divider{margin:0 16px;}
+}
+@media(max-width:600px){
+  .pgrid2,.mrgrid{grid-template-columns:repeat(2,1fr);padding:8px 10px 40px;gap:8px;}
+  .rh,.mrh{padding:14px 10px 8px;}
+  .star{font-size:1.1rem;}
+  .utab2{padding:10px 13px;font-size:.68rem;}
+  .agrid{grid-template-columns:1fr;}
+  .acard{padding:22px 14px;}
+  .auth-inner{padding:14px 10px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════ NAV ════════════ -->
+<nav>
+  <span class="logo" onclick="goHome()">AuraScore</span>
+  <ul class="nc" id="nav-links">
+    <li><a onclick="navTo('s1')">Golden Ratio</a></li>
+    <li><a onclick="navTo('s2')">How to Rate</a></li>
+    <li><a onclick="navTo('s3')">About</a></li>
+  </ul>
+  <div class="nr" id="nav-right-desk">
+    <span id="nav-uinfo"></span>
+    <button class="bnav g" id="btn-login" onclick="showPg('auth')">Login</button>
+    <button class="bnav" id="btn-logout" style="display:none" onclick="logout()">Logout</button>
+  </div>
+  <div class="ham" id="ham" onclick="toggleDrawer()">
+    <span></span><span></span><span></span>
+  </div>
+</nav>
+
+<!-- mobile drawer -->
+<div class="drawer" id="drawer">
+  <a id="ml1" onclick="mobNav('s1')">Golden Ratio</a>
+  <a id="ml2" onclick="mobNav('s2')">How to Rate</a>
+  <a id="ml3" onclick="mobNav('s3')">About</a>
+  <div class="mob-btns" id="mob-btns">
+    <button class="bnav g" onclick="showPg('auth');closeDrawer()">Login / Register</button>
+  </div>
+  <div class="mob-urow" id="mob-urow">
+    <span id="mob-uname"></span>
+    <button class="bnav" onclick="logout();closeDrawer()">Logout</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ════════════ LANDING ════════════ -->
+<div class="page active" id="pg-land">
+  <section class="hero">
+    <div class="badge">Science · Aesthetics · Research</div>
+    <h1>The <em>Human Face</em><br>Rating System</h1>
+    <p>Explore the mathematics of beauty through the Golden Ratio. Rate faces, contribute to research, and discover what science says about human aesthetics.</p>
+    <button class="bcta" onclick="showPg('auth')">Let's Get Started →</button>
+    <div class="hscroll">Scroll to explore<span></span></div>
+  </section>
+
+  <div class="divider" id="s1"></div>
+  <section class="isec">
+    <div class="slbl">Science of Beauty</div>
+    <h2>The Golden Ratio<br>&amp; Human Faces</h2>
+    <p style="color:var(--text2);max-width:540px;line-height:1.85;font-size:.91rem;">The Golden Ratio (φ ≈ 1.618) has fascinated mathematicians for millennia. Studies suggest faces whose proportions approximate this ratio are consistently perceived as more attractive across cultures.</p>
+    <div class="igrid2">
+      <div class="icard2"><div class="cn">φ</div><h3>Phi Ratio (1.618)</h3><p>The ideal ratio present in facial symmetry — forehead to chin, nose width to mouth width.</p></div>
+      <div class="icard2"><div class="cn">72%</div><h3>Symmetry Factor</h3><p>Research shows humans are 72% more likely to rate symmetrical faces as attractive regardless of other features.</p></div>
+      <div class="icard2"><div class="cn">5</div><h3>Core Proportions</h3><p>Five key ratios: eye spacing, nose length, mouth width, jaw width, and forehead height.</p></div>
+    </div>
+  </section>
+
+  <div class="divider" id="s2"></div>
+  <section class="isec">
+    <div class="slbl">Your Participation</div>
+    <h2>How to Rate</h2>
+    <p style="color:var(--text2);max-width:540px;line-height:1.85;font-size:.91rem;">Your ratings contribute to ongoing research. There are no right or wrong answers — only your honest perception matters.</p>
+    <div class="igrid2">
+      <div class="icard2"><div class="cn">01</div><h3>Create an Account</h3><p>Register with a username and password. Your progress is saved so you can continue anytime.</p></div>
+      <div class="icard2"><div class="cn">02</div><h3>Browse the Gallery</h3><p>View photographs in a responsive grid. Each session shows a different shuffled angle per person.</p></div>
+      <div class="icard2"><div class="cn">03</div><h3>Submit Your Rating</h3><p>Hover (or tap) and select 1–5 stars. Rated photos disappear from the queue automatically.</p></div>
+      <div class="icard2"><div class="cn">04</div><h3>Update Anytime</h3><p>Visit "My Ratings" to see all your submissions and update any rating whenever you want.</p></div>
+    </div>
+  </section>
+
+  <div class="divider" id="s3"></div>
+  <section class="isec">
+    <div class="slbl">Who We Are</div>
+    <h2>About This Project</h2>
+    <div class="agrid">
+      <div>
+        <p style="color:var(--text2);line-height:1.9;font-size:.91rem;margin-bottom:14px;">AuraScore is an academic research project studying human aesthetic perception. By collecting crowd-sourced ratings, we aim to understand how facial features, angles, and proportions are perceived across diverse participant groups.</p>
+        <p style="color:var(--text2);line-height:1.9;font-size:.91rem;">All data is anonymized. Participants may withdraw at any time. This project is conducted in accordance with ethical research standards.</p>
+      </div>
+      <div>
+        <div class="astat"><div class="astat-n" id="st-photos">0</div><div class="astat-l">Photos in Database</div></div>
+        <div class="astat"><div class="astat-n" id="st-ratings">0</div><div class="astat-l">Total Ratings Submitted</div></div>
+        <div class="astat"><div class="astat-n" id="st-users">0</div><div class="astat-l">Registered Participants</div></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ════════════ AUTH ════════════ -->
+<div class="page" id="pg-auth">
+  <div class="auth-inner">
+    <div class="auth-wrap">
+      <div class="atabs">
+        <div class="atab active" id="tab-li"  onclick="swAuthTab('li')">Login</div>
+        <div class="atab"        id="tab-rg"  onclick="swAuthTab('rg')">Register</div>
+        <div class="atab"        id="tab-adm" onclick="swAuthTab('adm')">Admin</div>
+      </div>
+      <!-- Login -->
+      <div id="auth-li" class="acard">
+        <h2>Welcome Back</h2><p>Login to continue your rating session</p>
+        <div class="fg"><label>Username</label><input type="text" id="li-u" autocomplete="username" placeholder="Enter username"/></div>
+        <div class="fg"><label>Password</label><input type="password" id="li-p" autocomplete="current-password" placeholder="Enter password"/></div>
+        <button class="bsub" onclick="doLogin()">Login</button>
+        <div class="amsg" id="li-msg"></div>
+      </div>
+      <!-- Register -->
+      <div id="auth-rg" class="acard" style="display:none">
+        <h2>Create Account</h2><p>Join the research project as a participant</p>
+        <div class="fg"><label>Username</label><input type="text" id="rg-u" placeholder="Choose a username"/></div>
+        <div class="fg"><label>Email (optional)</label><input type="email" id="rg-e" placeholder="your@email.com"/></div>
+        <div class="fg"><label>Password</label><input type="password" id="rg-p" placeholder="Choose a password"/></div>
+        <div class="fg"><label>Confirm Password</label><input type="password" id="rg-p2" placeholder="Repeat password"/></div>
+        <button class="bsub" onclick="doRegister()">Create Account</button>
+        <div class="amsg" id="rg-msg"></div>
+      </div>
+      <!-- Admin -->
+      <div id="auth-adm" class="acard" style="display:none">
+        <h2>Admin Access</h2><p>Restricted to authorized administrators only</p>
+        <div class="fg"><label>Username</label><input type="text" id="adm-u" placeholder="Username"/></div>
+        <div class="fg"><label>Password</label><input type="password" id="adm-p" placeholder="Password"/></div>
+        <button class="bsub" onclick="doAdminLogin()">Login as Admin</button>
+        <div class="amsg" id="adm-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ RATING PAGE ════════════ -->
+<div class="page" id="pg-rate">
+  <!-- DB status indicator -->
+  <div class="dbbar" id="dbbar" style="display:none">
+    <div class="dot yellow" id="db-dot"></div>
+    <span id="db-status-txt" style="color:var(--text2);">Connecting…</span>
+  </div>
+  <div class="utabs">
+    <div class="utab2 active" id="ut-rate"      onclick="swUT('rate')">📷 Rate Photos</div>
+    <div class="utab2"        id="ut-myratings" onclick="swUT('myratings')">⭐ My Ratings</div>
+  </div>
+  <!-- Rate Photos -->
+  <div class="usec active" id="us-rate">
+    <div class="rh">
+      <div><h2>Rate the Faces</h2><p style="font-size:.77rem;color:var(--text2);margin-top:2px;">Hover a photo and tap the stars to rate. Rated photos are hidden automatically.</p></div>
+      <div class="srow2">
+        <div class="spill">Rated: <b id="u-rated">0</b></div>
+        <div class="spill">Remaining: <b id="u-rem">0</b></div>
+        <div class="spill">Total: <b id="u-total">0</b></div>
+      </div>
+    </div>
+    <div class="pgrid2" id="rate-grid"></div>
+  </div>
+  <!-- My Ratings -->
+  <div class="usec" id="us-myratings">
+    <div class="mrh"><h2>My Ratings</h2><p>All your submitted ratings. Tap the edit stars to update any rating.</p></div>
+    <div class="mrgrid" id="mr-grid"></div>
+  </div>
+</div>
+
+<!-- ════════════ ADMIN ════════════ -->
+<div class="page" id="pg-admin">
+  <div class="admin-wrap">
+    <div class="aside">
+      <h3>Admin Panel</h3>
+      <div class="slink on"  id="sl-ov"   onclick="swAP('ov')">📊 Overview</div>
+      <div class="slink"     id="sl-up"   onclick="swAP('up')">📤 Upload Photo</div>
+      <div class="slink"     id="sl-mp"   onclick="swAP('mp')">🖼 Manage Photos</div>
+      <div class="slink"     id="sl-rd"   onclick="swAP('rd')">⭐ Ratings Data</div>
+      <div class="slink"     id="sl-usr"  onclick="swAP('usr')">👥 Users</div>
+    </div>
+    <div class="acont">
+
+      <!-- Overview -->
+      <div class="apnl active" id="ap-ov">
+        <h2>Overview</h2>
+        <div class="scards">
+          <div class="sc"><div class="sc-n" id="a-ph">0</div><div class="sc-l">Total Photos</div></div>
+          <div class="sc"><div class="sc-n" id="a-rt">0</div><div class="sc-l">Total Ratings</div></div>
+          <div class="sc"><div class="sc-n" id="a-us">0</div><div class="sc-l">Registered Users</div></div>
+          <div class="sc"><div class="sc-n" id="a-av">—</div><div class="sc-l">Average Rating</div></div>
+        </div>
+        <div id="db-mode-info" style="font-size:.81rem;color:var(--text2);padding:14px;background:var(--surface);border-radius:9px;border:1px solid var(--border);line-height:1.7;"></div>
+      </div>
+
+      <!-- Upload -->
+      <div class="apnl" id="ap-up">
+        <h2>Upload Photo</h2>
+        <p style="font-size:.81rem;color:var(--text2);margin-bottom:16px;line-height:1.65;">
+          Photos are compressed and stored directly in the database — <strong style="color:var(--accent)">no Firebase Storage subscription needed.</strong>
+        </p>
+        <div class="uform">
+          <div class="fg"><label>Celebrity / Person Name</label><input type="text" id="up-name" placeholder="e.g. Scarlett Johansson"/></div>
+          <div class="fg"><label>Angle / Description</label><input type="text" id="up-angle" placeholder="e.g. Front, Left Side, 45°"/></div>
+          <div class="fg">
+            <label>Select Photo File</label>
+            <input type="file" id="up-file" accept="image/*" onchange="prevUp(this)" style="padding:8px;color:var(--text2);"/>
+            <div class="size-warn" id="size-warn">⚠ Image will be compressed to fit database limits.</div>
+          </div>
+          <img id="up-prev" class="prev-img"/>
+          <button class="bsub" style="width:auto;padding:10px 26px;" onclick="uploadPhoto()">Upload Photo</button>
+          <div class="amsg" id="up-msg"></div>
+        </div>
+      </div>
+
+      <!-- Manage Photos -->
+      <div class="apnl" id="ap-mp">
+        <h2>Manage Photos</h2>
+        <div class="mpgrid" id="adm-pgrid"></div>
+      </div>
+
+      <!-- Ratings Data -->
+      <div class="apnl" id="ap-rd">
+        <h2>Ratings Data</h2>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+          <button class="bexp" onclick="expCSV()">⬇ Export CSV</button>
+          <button class="bexp" onclick="expExcel()">⬇ Export Excel</button>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="dt"><thead><tr><th>Person</th><th>Angle</th><th>User</th><th>Rating</th><th>Date</th></tr></thead>
+          <tbody id="rt-body"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Users -->
+      <div class="apnl" id="ap-usr">
+        <h2>Users</h2>
+        <div style="overflow-x:auto;">
+          <table class="dt"><thead><tr><th>Username</th><th>Email</th><th>Ratings</th><th>Joined</th></tr></thead>
+          <tbody id="usr-body"></tbody></table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════ -->
+<script>
+/* ════════════════════════════════════════════════════════════
+   FIREBASE CONFIG
+   ──────────────────────────────────────────────────────────
+   Step 1: Set USE_FIREBASE = true
+   Step 2: Paste YOUR firebaseConfig from Firebase Console
+   (Only Firestore is needed — Storage is NOT required!)
+════════════════════════════════════════════════════════════ */
+const USE_FIREBASE = false;   // ← change to true after you paste your config
+
+const FIREBASE_CONFIG = {
+  apiKey:            "YOUR_API_KEY",
+  authDomain:        "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId:         "YOUR_PROJECT_ID",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId:             "YOUR_APP_ID"
+  // ↑ No storageBucket needed!
+};
+
+/* ════════════════════════════════════════════════════════════
+   IMAGE COMPRESSION
+   Resizes + compresses photos to ~80KB so they fit in
+   Firestore's 1MB document limit. No Storage needed!
+════════════════════════════════════════════════════════════ */
+function compressImage(file, maxW=480, maxH=640, quality=0.65) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      const ratio = Math.min(maxW/w, maxH/h, 1);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      res(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   LOCAL STORAGE FALLBACK
+════════════════════════════════════════════════════════════ */
+const LS = {
+  g: k  => { try { return JSON.parse(localStorage.getItem('as_'+k)); } catch(e) { return null; } },
+  s: (k,v) => localStorage.setItem('as_'+k, JSON.stringify(v)),
+  users:   () => LS.g('users')   || {},
+  photos:  () => LS.g('photos')  || [],
+  ratings: () => LS.g('ratings') || [],
+};
+if (!LS.g('admin')) LS.s('admin', { username:'admin', password:'admin123' });
+
+/* ════════════════════════════════════════════════════════════
+   FIREBASE ADAPTER  (wraps Firestore calls)
+════════════════════════════════════════════════════════════ */
+let FB = null;
+let fbReady = false;
+
+async function initFirebase() {
+  if (!USE_FIREBASE) return;
+  try {
+    const { initializeApp }        = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const { getFirestore, collection, doc, getDoc, getDocs,
+            setDoc, deleteDoc, onSnapshot, query, orderBy }
+          = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db  = getFirestore(app);
+
+    FB = {
+      /* ── photos ── */
+      async getPhotos() {
+        const snap = await getDocs(collection(db,'photos'));
+        return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      },
+      async addPhoto(data) {
+        await setDoc(doc(collection(db,'photos')), data);
+      },
+      async delPhoto(id) {
+        await deleteDoc(doc(db,'photos',id));
+      },
+
+      /* ── users ── */
+      async getUser(username) {
+        const snap = await getDoc(doc(db,'users',username));
+        return snap.exists() ? snap.data() : null;
+      },
+      async setUser(username, data) {
+        await setDoc(doc(db,'users',username), data);
+      },
+      async getAllUsers() {
+        const snap = await getDocs(collection(db,'users'));
+        return snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      },
+
+      /* ── ratings ── */
+      async getRatings() {
+        const snap = await getDocs(collection(db,'ratings'));
+        return snap.docs.map(d => d.data());
+      },
+      async setRating(uid, pid, data) {
+        await setDoc(doc(db,'ratings', uid+'__'+pid), data);
+      },
+      async delRatingsForPhoto(pid) {
+        const snap = await getDocs(collection(db,'ratings'));
+        const dels = snap.docs.filter(d => d.data().photoId === pid);
+        await Promise.all(dels.map(d => deleteDoc(d.ref)));
+      },
+
+      /* ── stats ── */
+      async getStats() {
+        const [ph, rt, us] = await Promise.all([
+          getDocs(collection(db,'photos')),
+          getDocs(collection(db,'ratings')),
+          getDocs(collection(db,'users')),
+        ]);
+        return { photos:ph.size, ratings:rt.size, users:us.size };
+      },
+    };
+
+    fbReady = true;
+    setDbStatus('green', '🔥 Firebase connected — data syncs across all devices');
+    console.log('Firebase connected!');
+  } catch(err) {
+    console.error('Firebase init failed:', err);
+    setDbStatus('red', '⚠ Firebase failed — using local storage');
+    fbReady = false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   UNIFIED DATA API  (auto-picks Firebase or localStorage)
+════════════════════════════════════════════════════════════ */
+const DB = {
+  async getPhotos() {
+    if (fbReady && FB) return FB.getPhotos();
+    return LS.photos();
+  },
+  async addPhoto(photo) {
+    if (fbReady && FB) { await FB.addPhoto(photo); return; }
+    const arr = LS.photos(); arr.push(photo); LS.s('photos', arr);
+  },
+  async delPhoto(id) {
+    if (fbReady && FB) { await FB.delPhoto(id); return; }
+    LS.s('photos', LS.photos().filter(p => p.id !== id));
+  },
+
+  async getUser(u) {
+    if (fbReady && FB) return FB.getUser(u);
+    const all = LS.users(); return all[u] || null;
+  },
+  async setUser(u, data) {
+    if (fbReady && FB) { await FB.setUser(u, data); return; }
+    const all = LS.users(); all[u] = data; LS.s('users', all);
+  },
+  async getAllUsers() {
+    if (fbReady && FB) return FB.getAllUsers();
+    return Object.entries(LS.users()).map(([id,v]) => ({ id, ...v }));
+  },
+
+  async getRatings() {
+    if (fbReady && FB) return FB.getRatings();
+    return LS.ratings();
+  },
+  async setRating(uid, pid, data) {
+    if (fbReady && FB) { await FB.setRating(uid, pid, data); return; }
+    const arr = LS.ratings();
+    const idx = arr.findIndex(r => r.userId===uid && r.photoId===pid);
+    if (idx >= 0) arr[idx] = data; else arr.push(data);
+    LS.s('ratings', arr);
+  },
+  async delRatingsForPhoto(pid) {
+    if (fbReady && FB) { await FB.delRatingsForPhoto(pid); return; }
+    LS.s('ratings', LS.ratings().filter(r => r.photoId !== pid));
+  },
+
+  async getStats() {
+    if (fbReady && FB) return FB.getStats();
+    return { photos:LS.photos().length, ratings:LS.ratings().length, users:Object.keys(LS.users()).length };
+  },
+};
+
+/* ════════════════════════════════════════════════════════════
+   SESSION
+════════════════════════════════════════════════════════════ */
+let S = { loggedIn:false, isAdmin:false, username:'' };
+
+/* ════════════════════════════════════════════════════════════
+   PAGE
+════════════════════════════════════════════════════════════ */
+function showPg(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('pg-'+id).classList.add('active');
+  window.scrollTo(0,0);
+  closeDrawer();
+  if (id==='land') updateLandingStats();
+}
+function goHome() {
+  if (S.loggedIn && !S.isAdmin) { showPg('rate'); swUT('rate'); }
+  else if (S.isAdmin) showPg('admin');
+  else { showPg('land'); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   NAV
+════════════════════════════════════════════════════════════ */
+function navIn(isAdmin) {
+  document.getElementById('btn-login').style.display  = 'none';
+  document.getElementById('btn-logout').style.display = 'inline-block';
+  document.getElementById('nav-uinfo').textContent    = S.username + (isAdmin?' (Admin)':'');
+  document.getElementById('nav-links').innerHTML = isAdmin
+    ? `<li><a onclick="showPg('admin');loadAdminData()">Dashboard</a></li>`
+    : `<li><a onclick="swUT('rate')">Rate Photos</a></li><li><a onclick="swUT('myratings')">My Ratings</a></li>`;
+  document.getElementById('mob-btns').style.display = 'none';
+  const mr = document.getElementById('mob-urow');
+  mr.style.display = 'flex';
+  document.getElementById('mob-uname').textContent = S.username + (isAdmin?' (Admin)':'');
+  ['ml1','ml2','ml3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isAdmin ? 'none' : '';
+  });
+  // show db status bar for users
+  if (!isAdmin) document.getElementById('dbbar').style.display = USE_FIREBASE ? 'flex' : 'none';
+}
+function navOut() {
+  document.getElementById('btn-login').style.display  = 'inline-block';
+  document.getElementById('btn-logout').style.display = 'none';
+  document.getElementById('nav-uinfo').textContent = '';
+  document.getElementById('nav-links').innerHTML =
+    `<li><a onclick="navTo('s1')">Golden Ratio</a></li>
+     <li><a onclick="navTo('s2')">How to Rate</a></li>
+     <li><a onclick="navTo('s3')">About</a></li>`;
+  document.getElementById('mob-btns').style.display = 'flex';
+  document.getElementById('mob-urow').style.display = 'none';
+  ['ml1','ml2','ml3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  document.getElementById('dbbar').style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════════════════
+   SCROLL / DRAWER
+════════════════════════════════════════════════════════════ */
+function navTo(id) {
+  if (!document.getElementById('pg-land').classList.contains('active')) {
+    showPg('land');
+    setTimeout(() => scrollId(id), 120);
+  } else scrollId(id);
+}
+function scrollId(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function mobNav(id) { closeDrawer(); navTo(id); }
+function toggleDrawer() {
+  document.getElementById('ham').classList.toggle('open');
+  document.getElementById('drawer').classList.toggle('open');
+}
+function closeDrawer() {
+  document.getElementById('ham').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+document.addEventListener('click', e => {
+  const d=document.getElementById('drawer'), h=document.getElementById('ham');
+  if (d.classList.contains('open') && !d.contains(e.target) && !h.contains(e.target)) closeDrawer();
+});
+
+/* ════════════════════════════════════════════════════════════
+   AUTH
+════════════════════════════════════════════════════════════ */
+function swAuthTab(t) {
+  ['li','rg','adm'].forEach(x => {
+    document.getElementById('tab-'+x).classList.toggle('active', x===t);
+    document.getElementById('auth-'+x).style.display = x===t ? 'block' : 'none';
+  });
+}
+
+async function doLogin() {
+  const u = gv('li-u'), p = gv('li-p'), msg = eid('li-msg');
+  if (!u||!p) { showMsg(msg,'Please fill in all fields','err'); return; }
+  setBtnLoading('li-u', true);
+  try {
+    let userData;
+    if (fbReady && FB) {
+      userData = await FB.getUser(u);
+    } else {
+      const all = LS.users();
+      userData = all[u] || null;
+    }
+    if (!userData || userData.password !== p) { showMsg(msg,'Invalid username or password','err'); return; }
+    S = { loggedIn:true, isAdmin:false, username:u };
+    navIn(false); showPg('rate'); swUT('rate');
+    showToast('Welcome back, '+u+'!');
+  } catch(err) {
+    showMsg(msg,'Login error: '+err.message,'err');
+  } finally { setBtnLoading('li-u', false); }
+}
+
+async function doRegister() {
+  const u=gv('rg-u'), e=gv('rg-e'), p=gv('rg-p'), p2=gv('rg-p2'), msg=eid('rg-msg');
+  if (!u||!p)       { showMsg(msg,'Username and password required','err'); return; }
+  if (p!==p2)       { showMsg(msg,'Passwords do not match','err'); return; }
+  if (u.length<3)   { showMsg(msg,'Username must be at least 3 characters','err'); return; }
+  if (u==='admin')  { showMsg(msg,'That username is reserved','err'); return; }
+  try {
+    let exists;
+    if (fbReady && FB) { exists = !!(await FB.getUser(u)); }
+    else { exists = !!(LS.users()[u]); }
+    if (exists) { showMsg(msg,'Username already taken','err'); return; }
+    const data = { password:p, email:e, joined:new Date().toISOString(), ratings:{} };
+    await DB.setUser(u, data);
+    S = { loggedIn:true, isAdmin:false, username:u };
+    navIn(false); showPg('rate'); swUT('rate');
+    showToast('Account created! Welcome, '+u+'!');
+  } catch(err) { showMsg(msg,'Registration error: '+err.message,'err'); }
+}
+
+async function doAdminLogin() {
+  const u=gv('adm-u'), p=gv('adm-p'), msg=eid('adm-msg');
+  const admin = LS.g('admin') || { username:'admin', password:'admin123' };
+  if (u!==admin.username || p!==admin.password) { showMsg(msg,'Invalid admin credentials','err'); return; }
+  S = { loggedIn:true, isAdmin:true, username:u };
+  navIn(true); showPg('admin'); loadAdminData();
+  showToast('Admin panel accessed');
+}
+
+function logout() {
+  S = { loggedIn:false, isAdmin:false, username:'' };
+  navOut(); showPg('land'); showToast('Logged out');
+}
+
+/* ════════════════════════════════════════════════════════════
+   USER TABS
+════════════════════════════════════════════════════════════ */
+function swUT(tab) {
+  if (!S.loggedIn) { showPg('auth'); return; }
+  if (!document.getElementById('pg-rate').classList.contains('active')) showPg('rate');
+  document.querySelectorAll('.utab2').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.usec').forEach(s => s.classList.remove('active'));
+  eid('ut-'+tab).classList.add('active');
+  eid('us-'+tab).classList.add('active');
+  closeDrawer();
+  if (tab==='rate')      loadRateGrid();
+  if (tab==='myratings') loadMyRatings();
+}
+
+/* ════════════════════════════════════════════════════════════
+   SHUFFLE LOGIC
+════════════════════════════════════════════════════════════ */
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+function pickOnePerPerson(photos) {
+  const byPerson = {};
+  photos.forEach(p => {
+    const k = p.name.toLowerCase().trim();
+    if (!byPerson[k]) byPerson[k] = [];
+    byPerson[k].push(p);
+  });
+  const picked = Object.values(byPerson).map(arr => arr[Math.floor(Math.random()*arr.length)]);
+  return shuffle(picked);
+}
+
+/* ════════════════════════════════════════════════════════════
+   RATING GRID
+════════════════════════════════════════════════════════════ */
+async function loadRateGrid() {
+  const grid = eid('rate-grid');
+  grid.innerHTML = loadingHTML();
+  try {
+    const [photos, userData] = await Promise.all([
+      DB.getPhotos(),
+      DB.getUser(S.username),
+    ]);
+    const userRatings = userData?.ratings || {};
+    const all     = pickOnePerPerson(photos);
+    const unrated = all.filter(p => !(p.id in userRatings));
+
+    eid('u-rated').textContent = Object.keys(userRatings).length;
+    eid('u-rem').textContent   = unrated.length;
+    eid('u-total').textContent = all.length;
+
+    grid.innerHTML = '';
+    if (all.length === 0) { grid.innerHTML = emptyHTML('📷','No photos available yet','The admin hasn\'t uploaded any photos yet.'); return; }
+    if (unrated.length === 0) { grid.innerHTML = emptyHTML('🎉','All photos rated!','Visit <b style="color:var(--accent)">My Ratings</b> to update any rating.'); return; }
+    unrated.forEach(photo => grid.appendChild(makeRateCard(photo)));
+  } catch(err) {
+    grid.innerHTML = emptyHTML('⚠','Error loading photos', err.message);
+  }
+}
+
+function makeRateCard(photo) {
+  const c = document.createElement('div');
+  c.className = 'pc';
+  c.innerHTML = `
+    ${photo.data ? `<img src="${photo.data}" alt="${photo.name}" loading="lazy"/>` : `<div class="ph"><span>👤</span><small>${photo.name}</small></div>`}
+    <div class="cov">
+      <div class="cn2">${photo.name} — ${photo.angle}</div>
+      <div class="sr" id="sr-${photo.id}">
+        ${[1,2,3,4,5].map(s=>`<span class="star" data-v="${s}" data-pid="${photo.id}" ontouchstart="" onclick="doRate('${photo.id}',${s},this)">★</span>`).join('')}
+      </div>
+    </div>`;
+  const stars = c.querySelectorAll('.star');
+  stars.forEach(star => {
+    star.addEventListener('mouseenter', function() {
+      const v=+this.dataset.v, pid=this.dataset.pid;
+      document.querySelectorAll(`#sr-${pid} .star`).forEach((s,i)=>{s.style.color=i<v?'var(--star)':'var(--star-e)';});
+    });
+  });
+  c.querySelector('.cov').addEventListener('mouseleave', ()=>{
+    document.querySelectorAll(`#sr-${photo.id} .star`).forEach(s=>s.style.color='var(--star-e)');
+  });
+  return c;
+}
+
+async function doRate(photoId, rating, el) {
+  try {
+    // optimistic UI — light up stars
+    el.parentElement.querySelectorAll('.star').forEach((s,i)=>{
+      s.style.color = i<rating?'var(--star)':'var(--star-e)';
+      s.classList.toggle('lit',i<rating);
+    });
+
+    // save user rating
+    const userData = await DB.getUser(S.username) || { password:'', email:'', joined:new Date().toISOString(), ratings:{} };
+    userData.ratings = userData.ratings || {};
+    userData.ratings[photoId] = rating;
+    await DB.setUser(S.username, userData);
+
+    // save to ratings log
+    const photos = await DB.getPhotos();
+    const photo  = photos.find(p=>p.id===photoId);
+    await DB.setRating(S.username, photoId, {
+      photoId, userId:S.username, rating,
+      photoName:photo?.name||'?', angle:photo?.angle||'?',
+      date:new Date().toISOString()
+    });
+
+    showToast(`${photo?.name||'Photo'} rated ${rating}★`);
+
+    // animate card out
+    const card = el.closest('.pc');
+    if (card) {
+      card.style.transition='opacity .38s ease,transform .38s ease';
+      card.style.opacity='0';
+      card.style.transform='scale(0.84)';
+      setTimeout(()=>{ card.remove(); refreshStatBar(userData.ratings, photoId); }, 400);
+    }
+  } catch(err) { showToast('Error saving: '+err.message); }
+}
+
+async function refreshStatBar(userRatings, removedPid) {
+  const photos = await DB.getPhotos();
+  const all    = pickOnePerPerson(photos);
+  const unrated= all.filter(p => !(p.id in userRatings)).length;
+  eid('u-rated').textContent = Object.keys(userRatings).length;
+  eid('u-rem').textContent   = unrated;
+  eid('u-total').textContent = all.length;
+  const grid = eid('rate-grid');
+  if (grid && grid.children.length===0 && unrated===0) {
+    grid.innerHTML = emptyHTML('🎉','All photos rated!','Visit <b style="color:var(--accent)">My Ratings</b> to update any rating.');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   MY RATINGS
+════════════════════════════════════════════════════════════ */
+async function loadMyRatings() {
+  const grid = eid('mr-grid');
+  grid.innerHTML = loadingHTML();
+  try {
+    const [photos, userData] = await Promise.all([DB.getPhotos(), DB.getUser(S.username)]);
+    const userRatings = userData?.ratings || {};
+    grid.innerHTML = '';
+    const ids = Object.keys(userRatings);
+    if (!ids.length) { grid.innerHTML = emptyHTML('⭐','No ratings yet','Go to Rate Photos to get started.'); return; }
+    ids.forEach(pid => {
+      const photo = photos.find(p=>p.id===pid);
+      if (!photo) return;
+      const cur = userRatings[pid] || 0;
+      const c = document.createElement('div');
+      c.className = 'mc'; c.id = 'mc-'+pid;
+      c.innerHTML = `
+        ${photo.data?`<img src="${photo.data}" alt="${photo.name}" loading="lazy"/>`:`<div class="ph" style="position:absolute;inset:0;">👤<small>${photo.name}</small></div>`}
+        <div class="mi">
+          <div class="mname">${photo.name}</div>
+          <div class="mangle">${photo.angle}</div>
+          <div class="mbig" id="mbig-${pid}">${'★'.repeat(cur)}${'☆'.repeat(5-cur)}</div>
+          <div class="elbl">Update Rating</div>
+          <div class="esr sr" id="esr-${pid}">
+            ${[1,2,3,4,5].map(s=>`<span class="star${s<=cur?' lit':''}" data-v="${s}" data-pid="${pid}" ontouchstart="" onclick="doUpdate('${pid}',${s},this)">★</span>`).join('')}
+          </div>
+        </div>`;
+      c.querySelectorAll('.star').forEach(star=>{
+        star.addEventListener('mouseenter',function(){
+          const v=+this.dataset.v,p2=this.dataset.pid;
+          document.querySelectorAll(`#esr-${p2} .star`).forEach((s,i)=>{s.style.color=i<v?'var(--star)':'var(--star-e)';});
+        });
+      });
+      c.querySelector('.mi').addEventListener('mouseleave',async()=>{
+        const u2 = await DB.getUser(S.username);
+        const c2 = u2?.ratings?.[pid] || 0;
+        document.querySelectorAll(`#esr-${pid} .star`).forEach((s,i)=>{s.style.color=i<c2?'var(--star)':'var(--star-e)';});
+      });
+      grid.appendChild(c);
+    });
+  } catch(err) { grid.innerHTML = emptyHTML('⚠','Error loading', err.message); }
+}
+
+async function doUpdate(photoId, rating, el) {
+  try {
+    el.parentElement.querySelectorAll('.star').forEach((s,i)=>{
+      s.style.color=i<rating?'var(--star)':'var(--star-e)';
+      s.classList.toggle('lit',i<rating);
+    });
+    const big = eid('mbig-'+photoId);
+    if (big) big.textContent = '★'.repeat(rating)+'☆'.repeat(5-rating);
+
+    const userData = await DB.getUser(S.username);
+    userData.ratings = userData.ratings || {};
+    userData.ratings[photoId] = rating;
+    await DB.setUser(S.username, userData);
+
+    const photos = await DB.getPhotos();
+    const photo  = photos.find(p=>p.id===photoId);
+    await DB.setRating(S.username, photoId, {
+      photoId, userId:S.username, rating,
+      photoName:photo?.name||'?', angle:photo?.angle||'?',
+      date:new Date().toISOString()
+    });
+    showToast(`Updated to ${rating}★`);
+  } catch(err) { showToast('Error: '+err.message); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   ADMIN PANEL
+════════════════════════════════════════════════════════════ */
+function swAP(id) {
+  document.querySelectorAll('.apnl').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.slink').forEach(l=>l.classList.remove('on'));
+  eid('ap-'+id).classList.add('active');
+  eid('sl-'+id).classList.add('on');
+  if (id==='mp')  renderAdmPhotos();
+  if (id==='rd')  renderRatings();
+  if (id==='usr') renderUsers();
+  if (id==='ov')  updateOverview();
+}
+async function loadAdminData() { updateOverview(); }
+
+async function updateOverview() {
+  const stats = await DB.getStats();
+  const ratings = await DB.getRatings();
+  eid('a-ph').textContent = stats.photos;
+  eid('a-rt').textContent = stats.ratings;
+  eid('a-us').textContent = stats.users;
+  const avg = ratings.length ? (ratings.reduce((a,r)=>a+r.rating,0)/ratings.length).toFixed(2) : '—';
+  eid('a-av').textContent = avg;
+  eid('db-mode-info').innerHTML = USE_FIREBASE && fbReady
+    ? `🔥 <strong>Firebase connected.</strong> Photos uploaded here are visible to ALL users on ALL devices in real-time.`
+    : `💾 <strong>Local storage mode.</strong> Data is saved in this browser only. To share data across devices, set <code>USE_FIREBASE = true</code> and paste your Firebase config at the top of the HTML file. Only Firestore is needed — <strong>no Storage subscription required.</strong>`;
+}
+
+/* upload */
+function prevUp(input) {
+  const img = eid('up-prev'), warn = eid('size-warn');
+  if (input.files[0]) {
+    const fr = new FileReader();
+    fr.onload = e => { img.src=e.target.result; img.style.display='block'; };
+    fr.readAsDataURL(input.files[0]);
+    warn.style.display = input.files[0].size > 300000 ? 'block' : 'none';
+  }
+}
+
+async function uploadPhoto() {
+  const name  = gv('up-name');
+  const angle = gv('up-angle') || 'Front';
+  const file  = eid('up-file').files[0];
+  const msg   = eid('up-msg');
+  if (!name) { showMsg(msg,'Please enter a person name','err'); return; }
+  if (!file) { showMsg(msg,'Please select a photo file','err'); return; }
+  const btn = document.querySelector('#ap-up .bsub');
+  btn.disabled = true; btn.textContent = 'Compressing…';
+  try {
+    // Compress image to ~80KB base64 — fits in Firestore 1MB doc limit
+    const compressed = await compressImage(file);
+    const id = 'p'+Date.now()+Math.random().toString(36).substr(2,5);
+    await DB.addPhoto({ id, name:name.trim(), angle:angle.trim(), data:compressed, uploadedAt:new Date().toISOString() });
+    eid('up-name').value=''; eid('up-angle').value=''; eid('up-file').value='';
+    eid('up-prev').style.display='none'; eid('size-warn').style.display='none';
+    showMsg(msg,`✓ "${name}" (${angle}) uploaded!`,'ok');
+    updateOverview(); updateLandingStats();
+    showToast('Photo uploaded!');
+  } catch(err) { showMsg(msg,'Upload error: '+err.message,'err'); }
+  finally { btn.disabled=false; btn.textContent='Upload Photo'; }
+}
+
+async function renderAdmPhotos() {
+  const grid = eid('adm-pgrid');
+  grid.innerHTML = '<div class="loading-card"><div class="spin"></div> Loading…</div>';
+  const photos = await DB.getPhotos();
+  grid.innerHTML = '';
+  if (!photos.length) { grid.innerHTML='<p style="color:var(--text2);font-size:.82rem;">No photos yet.</p>'; return; }
+  photos.forEach(photo=>{
+    const c=document.createElement('div'); c.className='mpc';
+    c.innerHTML=`
+      ${photo.data?`<img src="${photo.data}" alt="${photo.name}"/>`:`<div class="ph" style="position:absolute;inset:0;font-size:1.5rem;">👤</div>`}
+      <button class="delbtn" onclick="deletePhoto('${photo.id}')">✕</button>
+      <div class="clabel">${photo.name} — ${photo.angle}</div>`;
+    grid.appendChild(c);
+  });
+}
+
+async function deletePhoto(id) {
+  if (!confirm('Delete this photo? All its ratings will also be removed.')) return;
+  try {
+    await Promise.all([DB.delPhoto(id), DB.delRatingsForPhoto(id)]);
+    // also remove from user profiles (localStorage only; Firestore ratings are separate docs)
+    if (!fbReady) {
+      const users = LS.users();
+      Object.keys(users).forEach(u=>{delete users[u].ratings[id];});
+      LS.s('users',users);
+    }
+    renderAdmPhotos(); updateOverview(); updateLandingStats();
+    showToast('Photo deleted');
+  } catch(err) { showToast('Error: '+err.message); }
+}
+
+async function renderRatings() {
+  const tbody = eid('rt-body');
+  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px;text-align:center;"><div class="spin"></div></td></tr>';
+  const ratings = await DB.getRatings();
+  tbody.innerHTML='';
+  if (!ratings.length){tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:24px;">No ratings yet</td></tr>';return;}
+  [...ratings].reverse().forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.photoName}</td><td>${r.angle}</td><td>${r.userId}</td>
+      <td><span class="sd">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span> ${r.rating}/5</td>
+      <td style="font-size:.72rem;color:var(--text3)">${new Date(r.date).toLocaleDateString()}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function renderUsers() {
+  const tbody = eid('usr-body');
+  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;"><div class="spin"></div></td></tr>';
+  const users = await DB.getAllUsers();
+  tbody.innerHTML='';
+  if (!users.length){tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:24px;">No users yet</td></tr>';return;}
+  users.forEach(u=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${u.id||u.username||'?'}</td>
+      <td style="color:var(--text3)">${u.email||'—'}</td>
+      <td>${Object.keys(u.ratings||{}).length}</td>
+      <td style="font-size:.72rem;color:var(--text3)">${u.joined?new Date(u.joined).toLocaleDateString():'—'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   EXPORT
+════════════════════════════════════════════════════════════ */
+async function expCSV() {
+  const r = await DB.getRatings();
+  if (!r.length){showToast('No ratings to export');return;}
+  const rows=[['Person','Angle','User','Rating','Date'],...r.map(x=>[x.photoName,x.angle,x.userId,x.rating,new Date(x.date).toLocaleDateString()])];
+  dlFile('aura_ratings.csv',rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n'),'text/csv');
+  showToast('CSV exported!');
+}
+async function expExcel() {
+  const r = await DB.getRatings();
+  if (!r.length){showToast('No ratings to export');return;}
+  let h='<table><tr><th>Person</th><th>Angle</th><th>User</th><th>Rating</th><th>Date</th></tr>';
+  r.forEach(x=>{h+=`<tr><td>${x.photoName}</td><td>${x.angle}</td><td>${x.userId}</td><td>${x.rating}</td><td>${new Date(x.date).toLocaleDateString()}</td></tr>`;});
+  dlFile('aura_ratings.xls','\ufeff'+h+'</table>','application/vnd.ms-excel');
+  showToast('Excel exported!');
+}
+function dlFile(n,c,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=n;a.click();}
+
+/* ════════════════════════════════════════════════════════════
+   LANDING STATS
+════════════════════════════════════════════════════════════ */
+async function updateLandingStats() {
+  try {
+    const stats = await DB.getStats();
+    eid('st-photos').textContent  = stats.photos;
+    eid('st-ratings').textContent = stats.ratings;
+    eid('st-users').textContent   = stats.users;
+  } catch(e) {}
+}
+
+/* ════════════════════════════════════════════════════════════
+   DB STATUS BAR
+════════════════════════════════════════════════════════════ */
+function setDbStatus(color, text) {
+  const dot = eid('db-dot'), txt = eid('db-status-txt');
+  dot.className = 'dot '+color;
+  txt.textContent = text;
+}
+
+/* ════════════════════════════════════════════════════════════
+   HELPERS
+════════════════════════════════════════════════════════════ */
+const eid = id => document.getElementById(id);
+const gv  = id => eid(id)?.value.trim() || '';
+function showMsg(el,msg,cls){el.textContent=msg;el.className='amsg '+(cls||'');}
+function showToast(msg){
+  const t=eid('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2800);
+}
+function setBtnLoading(id,on){const b=eid(id);if(b)b.disabled=on;}
+function loadingHTML(){return'<div class="loading-card"><div class="spin"></div> Loading…</div>';}
+function emptyHTML(icon,title,sub){
+  return`<div style="grid-column:1/-1;text-align:center;padding:68px 20px;color:var(--text3);">
+    <div style="font-size:2.7rem;margin-bottom:12px;">${icon}</div>
+    <p style="font-size:.95rem;color:var(--text2);margin-bottom:5px;">${title}</p>
+    <p style="font-size:.79rem;">${sub}</p></div>`;
+}
+
+/* ════════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════════ */
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBvp2GlOtcxn1yS_WfshP8gQcr5fg-p__c",
@@ -44,1166 +1225,13 @@ const firebaseConfig = {
   appId: "1:939586805848:web:cc45268f90b7c102086a2d",
   measurementId: "G-BK3VBT48PB"
 };
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
-/* expose to global scope so non-module functions can use */
-window._fb = { db, storage, collection, doc, getDoc, getDocs,
-               setDoc, deleteDoc, updateDoc, query, where,
-               serverTimestamp, onSnapshot,
-               ref, uploadString, getDownloadURL, deleteObject };
-window._fbReady = true;
-document.dispatchEvent(new Event('fbReady'));
-</script>
-
-<style>
-/* ══════════════════════════════════
-   CSS VARIABLES & RESET
-═══════════════════════════════════ */
-:root{
-  --bg:#0a0a0f; --bg2:#111118; --bg3:#18181f;
-  --surface:#1e1e28; --border:#2a2a38;
-  --accent:#c9a96e; --accent2:#e8c98a; --gold:#f0d080;
-  --text:#e8e4dc; --text2:#9a9490; --text3:#5a5660;
-  --danger:#e06060; --success:#60c080;
-  --star:#f0c040; --star-empty:#2e2e3a;
-  --r:12px; --tr:.3s cubic-bezier(.4,0,.2,1);
-  --nh:60px;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-html{scroll-behavior:smooth;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
-::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
-
-/* ══ NAV ══ */
-nav{
-  position:fixed;top:0;left:0;right:0;z-index:3000;
-  height:var(--nh);display:flex;align-items:center;justify-content:space-between;
-  padding:0 28px;
-  background:rgba(10,10,15,.94);backdrop-filter:blur(18px);
-  border-bottom:1px solid var(--border);
-}
-.nav-logo{
-  font-family:'Cormorant Garamond',serif;font-size:1.35rem;font-weight:600;
-  color:var(--accent);cursor:pointer;letter-spacing:.05em;white-space:nowrap;flex-shrink:0;
-}
-.nav-center{display:flex;gap:24px;list-style:none;}
-.nav-center a{
-  font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;
-  color:var(--text2);text-decoration:none;cursor:pointer;
-  padding:4px 0;border-bottom:1px solid transparent;transition:all var(--tr);
-}
-.nav-center a:hover{color:var(--accent);border-bottom-color:rgba(201,169,110,.4);}
-.nav-right{display:flex;gap:8px;align-items:center;}
-#nav-user-info{font-size:.76rem;color:var(--text2);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;}
-.btn-nav{
-  padding:7px 16px;border-radius:6px;font-size:.76rem;font-family:'DM Sans',sans-serif;
-  cursor:pointer;border:1px solid var(--border);background:transparent;
-  color:var(--text2);letter-spacing:.06em;text-transform:uppercase;transition:all var(--tr);
-  white-space:nowrap;
-}
-.btn-nav:hover{border-color:var(--accent);color:var(--accent);}
-.btn-nav.gold{background:var(--accent);border-color:var(--accent);color:#0a0a0f;font-weight:500;}
-.btn-nav.gold:hover{background:var(--accent2);}
-
-/* hamburger */
-.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;padding:6px;flex-shrink:0;}
-.hamburger span{display:block;width:20px;height:2px;background:var(--text2);border-radius:2px;transition:all .3s;}
-.hamburger.open span:nth-child(1){transform:rotate(45deg) translate(5px,5px);}
-.hamburger.open span:nth-child(2){opacity:0;}
-.hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(5px,-5px);}
-
-/* mobile drawer */
-.mob-drawer{
-  display:none;position:fixed;top:var(--nh);left:0;right:0;z-index:2999;
-  background:rgba(10,10,15,.98);border-bottom:1px solid var(--border);
-  padding:16px 20px 24px;flex-direction:column;gap:0;
-}
-.mob-drawer.open{display:flex;}
-.mob-drawer a{
-  font-size:.88rem;letter-spacing:.07em;text-transform:uppercase;
-  color:var(--text2);cursor:pointer;padding:13px 6px;
-  border-bottom:1px solid rgba(42,42,56,.5);transition:color var(--tr);
-}
-.mob-drawer a:hover{color:var(--accent);}
-.mob-drawer a:last-of-type{border-bottom:none;}
-.mob-btn-row{display:flex;gap:8px;margin-top:14px;}
-.mob-btn-row button{flex:1;}
-.mob-user-row{display:none;align-items:center;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
-.mob-user-row span{font-size:.8rem;color:var(--text2);flex:1;}
-
-/* ══ PAGES ══ */
-.page{display:none;min-height:100vh;padding-top:var(--nh);}
-.page.active{display:block;}
-
-/* ══ LANDING ══ */
-#page-landing{background:radial-gradient(ellipse 80% 60% at 50% -10%,#2a1f0a 0%,var(--bg) 60%);}
-.hero{
-  min-height:calc(100vh - var(--nh));
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;padding:60px 20px;position:relative;overflow:hidden;
-}
-.hero::before{
-  content:'';position:absolute;inset:0;
-  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none'%3E%3Cg fill='%23c9a96e' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  pointer-events:none;
-}
-.hero-badge{display:inline-block;padding:5px 16px;border-radius:20px;border:1px solid rgba(201,169,110,.3);background:rgba(201,169,110,.08);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:22px;}
-.hero h1{font-family:'Cormorant Garamond',serif;font-size:clamp(2.2rem,7vw,5.2rem);font-weight:300;line-height:1.06;color:var(--text);}
-.hero h1 em{font-style:italic;color:var(--accent);}
-.hero-sub{font-size:.97rem;color:var(--text2);max-width:440px;line-height:1.8;margin:18px auto 32px;}
-.btn-cta{
-  padding:14px 40px;border-radius:8px;background:var(--accent);color:#0a0a0f;
-  font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:500;
-  letter-spacing:.08em;text-transform:uppercase;border:none;cursor:pointer;
-  transition:all var(--tr);box-shadow:0 0 40px rgba(201,169,110,.25);
-}
-.btn-cta:hover{background:var(--accent2);box-shadow:0 0 60px rgba(201,169,110,.4);transform:translateY(-2px);}
-.hero-scroll{margin-top:44px;color:var(--text3);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;}
-.hero-scroll span{display:block;width:1px;height:34px;background:var(--border);margin:8px auto 0;}
-
-.info-section{padding:72px 40px;max-width:1100px;margin:0 auto;}
-.section-label{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
-.info-section h2{font-family:'Cormorant Garamond',serif;font-size:clamp(1.7rem,4vw,2.9rem);font-weight:300;color:var(--text);margin-bottom:18px;line-height:1.15;}
-.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;margin-top:36px;}
-.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:26px;transition:border-color var(--tr);}
-.info-card:hover{border-color:rgba(201,169,110,.4);}
-.info-card .cn{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:300;color:var(--accent);opacity:.5;margin-bottom:12px;line-height:1;}
-.info-card h3{font-size:.92rem;font-weight:500;margin-bottom:7px;color:var(--text);}
-.info-card p{font-size:.83rem;color:var(--text2);line-height:1.7;}
-.divider{height:1px;background:var(--border);margin:0 40px;}
-.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:center;margin-top:32px;}
-.about-stat{display:flex;flex-direction:column;gap:3px;border-left:2px solid var(--accent);padding-left:16px;margin-bottom:22px;}
-.about-stat-num{font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:300;color:var(--accent);}
-.about-stat-label{font-size:.78rem;color:var(--text2);}
-
-/* ══ AUTH ══ */
-#page-auth{background:radial-gradient(ellipse 60% 50% at 50% 0%,#1a150a 0%,var(--bg) 70%);}
-.auth-inner{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - var(--nh));padding:28px 16px;}
-.auth-wrap{width:100%;max-width:420px;}
-.auth-tabs{display:flex;gap:3px;margin-bottom:24px;background:var(--bg2);border-radius:10px;padding:3px;border:1px solid var(--border);}
-.auth-tab{flex:1;padding:9px 4px;text-align:center;border-radius:8px;cursor:pointer;font-size:.75rem;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);transition:all var(--tr);}
-.auth-tab.active{background:var(--surface);color:var(--text);}
-.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;}
-.auth-card h2{font-family:'Cormorant Garamond',serif;font-size:1.85rem;font-weight:300;margin-bottom:4px;}
-.auth-card>p{font-size:.81rem;color:var(--text2);margin-bottom:22px;}
-.fg{margin-bottom:14px;}
-.fg label{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text2);margin-bottom:6px;}
-.fg input{width:100%;padding:11px 13px;border-radius:7px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;font-size:.88rem;outline:none;transition:border-color var(--tr);}
-.fg input:focus{border-color:var(--accent);}
-.btn-sub{width:100%;padding:12px;border-radius:7px;background:var(--accent);color:#0a0a0f;font-family:'DM Sans',sans-serif;font-size:.86rem;font-weight:500;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;margin-top:6px;transition:all var(--tr);}
-.btn-sub:hover{background:var(--accent2);transform:translateY(-1px);}
-.btn-sub:disabled{opacity:.5;cursor:not-allowed;transform:none;}
-.auth-msg{margin-top:10px;font-size:.78rem;text-align:center;min-height:16px;}
-.auth-msg.err{color:var(--danger);}
-.auth-msg.ok{color:var(--success);}
-
-/* ══ USER RATING PAGE ══ */
-#page-rating{background:var(--bg);}
-.user-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:var(--nh);z-index:100;overflow-x:auto;}
-.utab{padding:13px 24px;font-size:.77rem;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all var(--tr);white-space:nowrap;flex-shrink:0;}
-.utab:hover{color:var(--text2);}
-.utab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.usec{display:none;}
-.usec.active{display:block;}
-
-/* rating header */
-.rh{padding:28px 28px 12px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;}
-.rh h2{font-family:'Cormorant Garamond',serif;font-size:1.65rem;font-weight:300;}
-.stat-row{display:flex;gap:8px;flex-wrap:wrap;}
-.spill{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:.74rem;color:var(--text2);}
-.spill b{color:var(--accent);}
-
-/* image grid */
-.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;padding:10px 28px 60px;}
-.icard{position:relative;border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid var(--border);cursor:default;transition:all var(--tr);aspect-ratio:3/4;}
-.icard:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.5);}
-.icard img{width:100%;height:100%;object-fit:cover;display:block;transition:transform var(--tr),filter var(--tr);filter:brightness(.88);}
-.icard:hover img{transform:scale(1.04);filter:brightness(1);}
-.cov{
-  position:absolute;inset:0;
-  background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.1) 52%,transparent 100%);
-  display:flex;flex-direction:column;justify-content:flex-end;padding:13px;
-  transition:opacity var(--tr);
-}
-@media(hover:hover){.cov{opacity:0;} .icard:hover .cov{opacity:1;}}
-.cname{font-size:.76rem;font-weight:500;color:var(--text);margin-bottom:6px;}
-.srow{display:flex;gap:5px;}
-.star{font-size:1.35rem;cursor:pointer;color:var(--star-empty);transition:color .1s,transform .1s;user-select:none;-webkit-tap-highlight-color:transparent;line-height:1;}
-.star.lit{color:var(--star);}
-.rbadge{position:absolute;top:7px;right:7px;background:rgba(201,169,110,.92);color:#0a0a0f;font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:10px;}
-.pholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1a24,#1f1f2e);color:var(--text3);font-size:2.2rem;}
-.pholder small{font-size:.7rem;margin-top:6px;color:var(--text3);text-align:center;padding:0 8px;}
-
-/* my ratings */
-.mrh{padding:28px 28px 12px;}
-.mrh h2{font-family:'Cormorant Garamond',serif;font-size:1.65rem;font-weight:300;margin-bottom:4px;}
-.mrh p{font-size:.8rem;color:var(--text2);}
-.mrgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;padding:10px 28px 60px;}
-.mycard{position:relative;border-radius:10px;overflow:hidden;background:var(--surface);border:1px solid rgba(201,169,110,.2);aspect-ratio:3/4;transition:border-color var(--tr);}
-.mycard:hover{border-color:var(--accent);}
-.mycard img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.75);}
-.minfo{
-  position:absolute;inset:0;
-  background:linear-gradient(to top,rgba(0,0,0,.95) 0%,transparent 55%);
-  display:flex;flex-direction:column;justify-content:flex-end;padding:13px;
-}
-.mname{font-size:.76rem;font-weight:500;color:var(--text);margin-bottom:2px;}
-.mangle{font-size:.66rem;color:var(--text3);margin-bottom:6px;}
-.mbig{font-size:1.05rem;color:var(--star);letter-spacing:1px;margin-bottom:7px;}
-.elabel{font-size:.6rem;color:var(--accent);letter-spacing:.07em;text-transform:uppercase;margin-bottom:3px;}
-.esrow{display:flex;gap:4px;}
-.esrow .star{font-size:1.1rem;}
-
-/* loading overlay */
-.loading-overlay{
-  position:absolute;inset:0;background:rgba(10,10,15,.8);
-  display:flex;align-items:center;justify-content:center;
-  border-radius:10px;z-index:10;
-}
-.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
-/* ══ ADMIN ══ */
-#page-admin{background:var(--bg);}
-.admin-wrap{display:grid;grid-template-columns:210px 1fr;min-height:calc(100vh - var(--nh));}
-.aside{background:var(--bg2);border-right:1px solid var(--border);padding:24px 12px;}
-.aside h3{font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text3);margin-bottom:12px;padding-left:8px;}
-.slink{display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:8px;cursor:pointer;font-size:.81rem;color:var(--text2);transition:all var(--tr);margin-bottom:3px;}
-.slink:hover,.slink.active{background:var(--surface);color:var(--text);}
-.slink.active{color:var(--accent);}
-.acont{padding:32px;}
-.apanel{display:none;}
-.apanel.active{display:block;}
-.apanel>h2{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:300;margin-bottom:22px;padding-bottom:13px;border-bottom:1px solid var(--border);}
-.sum-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
-.scard{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;}
-.snum{font-family:'Cormorant Garamond',serif;font-size:2.1rem;font-weight:300;color:var(--accent);}
-.slbl{font-size:.73rem;color:var(--text2);margin-top:3px;}
-.uform{display:grid;gap:12px;max-width:460px;margin-bottom:16px;}
-.uform .fg{margin-bottom:0;}
-.prev-img{max-width:160px;border-radius:8px;border:1px solid var(--border);margin-top:12px;display:none;}
-.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:10px;margin-top:16px;}
-.pcard{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);aspect-ratio:3/4;background:var(--surface);}
-.pcard img{width:100%;height:100%;object-fit:cover;}
-.delbtn{position:absolute;top:5px;right:5px;background:rgba(224,96,96,.9);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:.68rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.clabel{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.78);padding:5px 7px;font-size:.65rem;color:var(--text2);}
-.dtable{width:100%;border-collapse:collapse;margin-top:12px;}
-.dtable th{text-align:left;padding:8px 11px;font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);border-bottom:1px solid var(--border);}
-.dtable td{padding:10px 11px;font-size:.81rem;color:var(--text2);border-bottom:1px solid rgba(42,42,56,.5);}
-.dtable tr:hover td{background:var(--surface);}
-.starsdisp{color:var(--star);letter-spacing:2px;}
-.btn-exp{padding:8px 20px;border-radius:7px;background:transparent;border:1px solid var(--accent);color:var(--accent);font-family:'DM Sans',sans-serif;font-size:.77rem;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;transition:all var(--tr);}
-.btn-exp:hover{background:var(--accent);color:#0a0a0f;}
-
-/* ══ TOAST ══ */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:var(--surface);border:1px solid var(--accent);color:var(--text);padding:10px 20px;border-radius:8px;font-size:.81rem;z-index:9999;transition:transform .4s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none;max-width:90vw;text-align:center;}
-.toast.show{transform:translateX(-50%) translateY(0);}
-
-/* ══ DB INFO BANNER ══ */
-.db-banner{background:rgba(201,169,110,.1);border:1px solid rgba(201,169,110,.3);border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:.83rem;color:var(--text2);line-height:1.6;}
-.db-banner strong{color:var(--accent);display:block;margin-bottom:4px;}
-.db-banner code{background:var(--bg2);padding:2px 6px;border-radius:4px;font-size:.78rem;color:var(--text);}
-
-/* ══ RESPONSIVE ══ */
-@media(max-width:880px){
-  nav{padding:0 16px;}
-  .nav-center{display:none;}
-  #nav-right-desk{display:none;}
-  .hamburger{display:flex;}
-  .admin-wrap{grid-template-columns:1fr;}
-  .aside{border-right:none;border-bottom:1px solid var(--border);padding:12px;display:flex;flex-wrap:wrap;gap:5px;}
-  .aside h3{width:100%;margin-bottom:4px;}
-  .slink{font-size:.73rem;padding:7px 10px;}
-  .acont{padding:20px 14px;}
-  .info-section{padding:52px 18px;}
-  .divider{margin:0 18px;}
-}
-@media(max-width:640px){
-  .igrid,.mrgrid{grid-template-columns:repeat(2,1fr);padding:8px 12px 40px;gap:9px;}
-  .rh,.mrh{padding:16px 12px 8px;}
-  .auth-card{padding:24px 16px;}
-  .auth-inner{padding:16px 12px;}
-  .star{font-size:1.15rem;}
-  .utab{padding:11px 14px;font-size:.7rem;}
-  .about-grid{grid-template-columns:1fr;}
-  .acont{padding:16px 12px;}
-}
-@media(max-width:380px){
-  .igrid,.mrgrid{gap:7px;}
-  .btn-cta{padding:12px 28px;}
-}
-</style>
-</head>
-<body>
-
-<!-- ══ NAV ══ -->
-<nav id="main-nav">
-  <span class="nav-logo" onclick="goHome()">AuraScore</span>
-  <ul class="nav-center" id="nav-links">
-    <li><a onclick="navTo('s-golden')">Golden Ratio</a></li>
-    <li><a onclick="navTo('s-how')">How to Rate</a></li>
-    <li><a onclick="navTo('s-about')">About</a></li>
-  </ul>
-  <div class="nav-right" id="nav-right-desk">
-    <span id="nav-user-info"></span>
-    <button class="btn-nav gold" id="btn-login" onclick="showPage('auth')">Login</button>
-    <button class="btn-nav" id="btn-logout" style="display:none" onclick="logout()">Logout</button>
-  </div>
-  <div class="hamburger" id="ham" onclick="toggleDrawer()">
-    <span></span><span></span><span></span>
-  </div>
-</nav>
-
-<!-- ══ MOBILE DRAWER ══ -->
-<div class="mob-drawer" id="drawer">
-  <a id="ml-golden" onclick="mobNavTo('s-golden')">Golden Ratio</a>
-  <a id="ml-how"    onclick="mobNavTo('s-how')">How to Rate</a>
-  <a id="ml-about"  onclick="mobNavTo('s-about')">About</a>
-  <div class="mob-btn-row" id="mob-btns">
-    <button class="btn-nav gold" onclick="showPage('auth');closeDrawer()">Login / Register</button>
-  </div>
-  <div class="mob-user-row" id="mob-user-row">
-    <span id="mob-uname"></span>
-    <button class="btn-nav" onclick="logout();closeDrawer()">Logout</button>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<!-- ══════════════ LANDING ══════════════ -->
-<div class="page active" id="page-landing">
-  <section class="hero">
-    <div class="hero-badge">Science · Aesthetics · Research</div>
-    <h1>The <em>Human Face</em><br>Rating System</h1>
-    <p class="hero-sub">Explore the mathematics of beauty through the Golden Ratio. Rate faces, contribute to research, and discover what science says about human aesthetics.</p>
-    <button class="btn-cta" onclick="showPage('auth')">Let's Get Started →</button>
-    <div class="hero-scroll">Scroll to explore<span></span></div>
-  </section>
-
-  <div class="divider" id="s-golden"></div>
-  <section class="info-section">
-    <div class="section-label">Science of Beauty</div>
-    <h2>The Golden Ratio<br>&amp; Human Faces</h2>
-    <p style="color:var(--text2);max-width:560px;line-height:1.85;font-size:.92rem;">The Golden Ratio (φ ≈ 1.618) has fascinated mathematicians and artists for millennia. Studies suggest faces whose proportions approximate this ratio are consistently perceived as more attractive across cultures — from the distance between eyes to the ratio of face width to length.</p>
-    <div class="info-grid">
-      <div class="info-card"><div class="cn">φ</div><h3>Phi Ratio (1.618)</h3><p>The ideal ratio present in facial symmetry — forehead to chin, nose width to mouth width.</p></div>
-      <div class="info-card"><div class="cn">72%</div><h3>Symmetry Factor</h3><p>Research shows humans are 72% more likely to rate symmetrical faces as attractive regardless of other features.</p></div>
-      <div class="info-card"><div class="cn">5</div><h3>Core Proportions</h3><p>Five key facial ratios: eye spacing, nose length, mouth width, jaw width, and forehead height.</p></div>
-    </div>
-  </section>
-
-  <div class="divider" id="s-how"></div>
-  <section class="info-section">
-    <div class="section-label">Your Participation</div>
-    <h2>How to Rate</h2>
-    <p style="color:var(--text2);max-width:560px;line-height:1.85;font-size:.92rem;">Your ratings are anonymous and contribute to ongoing research. There are no right or wrong answers — only your honest perception matters.</p>
-    <div class="info-grid">
-      <div class="info-card"><div class="cn">01</div><h3>Create an Account</h3><p>Register with a username and password. Your progress is saved so you can continue anytime.</p></div>
-      <div class="info-card"><div class="cn">02</div><h3>Browse the Gallery</h3><p>View facial photographs in a responsive grid. Each session shows a different shuffled angle per person.</p></div>
-      <div class="info-card"><div class="cn">03</div><h3>Submit Your Rating</h3><p>Hover (or tap on mobile) and select stars 1–5. Rated photos disappear from the queue automatically.</p></div>
-      <div class="info-card"><div class="cn">04</div><h3>Update Anytime</h3><p>Visit "My Ratings" tab to see all submissions and update any rating whenever you want.</p></div>
-    </div>
-  </section>
-
-  <div class="divider" id="s-about"></div>
-  <section class="info-section">
-    <div class="section-label">Who We Are</div>
-    <h2>About This Project</h2>
-    <div class="about-grid">
-      <div>
-        <p style="color:var(--text2);line-height:1.9;font-size:.92rem;margin-bottom:16px;">AuraScore is an academic research project studying human aesthetic perception. By collecting crowd-sourced ratings, we aim to understand how facial features, angles, and proportions are perceived across diverse participant groups.</p>
-        <p style="color:var(--text2);line-height:1.9;font-size:.92rem;">All data is anonymized. Participants may withdraw at any time. This project is conducted in accordance with ethical research standards.</p>
-      </div>
-      <div>
-        <div class="about-stat"><div class="about-stat-num" id="stat-photos">0</div><div class="about-stat-label">Photos in Database</div></div>
-        <div class="about-stat"><div class="about-stat-num" id="stat-ratings">0</div><div class="about-stat-label">Total Ratings Submitted</div></div>
-        <div class="about-stat"><div class="about-stat-num" id="stat-users">0</div><div class="about-stat-label">Registered Participants</div></div>
-      </div>
-    </div>
-  </section>
-</div>
-
-<!-- ══════════════ AUTH ══════════════ -->
-<div class="page" id="page-auth">
-  <div class="auth-inner">
-    <div class="auth-wrap">
-      <div class="auth-tabs">
-        <div class="auth-tab active" id="tab-login"    onclick="switchAuthTab('login')">Login</div>
-        <div class="auth-tab"        id="tab-register" onclick="switchAuthTab('register')">Register</div>
-        <div class="auth-tab"        id="tab-admin"    onclick="switchAuthTab('admin')">Admin</div>
-      </div>
-
-      <!-- LOGIN -->
-      <div id="auth-login" class="auth-card">
-        <h2>Welcome Back</h2>
-        <p>Login to continue your rating session</p>
-        <div class="fg"><label>Username</label><input type="text" id="li-user" autocomplete="username" placeholder="Enter username"/></div>
-        <div class="fg"><label>Password</label><input type="password" id="li-pass" autocomplete="current-password" placeholder="Enter password"/></div>
-        <button class="btn-sub" id="btn-dologin" onclick="doLogin()">Login</button>
-        <div class="auth-msg" id="li-msg"></div>
-      </div>
-
-      <!-- REGISTER -->
-      <div id="auth-register" class="auth-card" style="display:none">
-        <h2>Create Account</h2>
-        <p>Join the research project as a participant</p>
-        <div class="fg"><label>Username</label><input type="text" id="rg-user" placeholder="Choose a username"/></div>
-        <div class="fg"><label>Email (optional)</label><input type="email" id="rg-email" placeholder="your@email.com"/></div>
-        <div class="fg"><label>Password</label><input type="password" id="rg-pass" placeholder="Choose a password"/></div>
-        <div class="fg"><label>Confirm Password</label><input type="password" id="rg-pass2" placeholder="Repeat password"/></div>
-        <button class="btn-sub" id="btn-doreg" onclick="doRegister()">Create Account</button>
-        <div class="auth-msg" id="rg-msg"></div>
-      </div>
-
-      <!-- ADMIN — no hints -->
-      <div id="auth-admin" class="auth-card" style="display:none">
-        <h2>Admin Access</h2>
-        <p>Restricted to authorized administrators only</p>
-        <div class="fg"><label>Username</label><input type="text" id="ad-user" placeholder="Username"/></div>
-        <div class="fg"><label>Password</label><input type="password" id="ad-pass" placeholder="Password"/></div>
-        <button class="btn-sub" id="btn-doadmin" onclick="doAdminLogin()">Login as Admin</button>
-        <div class="auth-msg" id="ad-msg"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════ RATING (USER DASHBOARD) ══════════════ -->
-<div class="page" id="page-rating">
-  <div class="user-tabs">
-    <div class="utab active" id="utab-rate"      onclick="switchUT('rate')">📷 Rate Photos</div>
-    <div class="utab"        id="utab-myratings" onclick="switchUT('myratings')">⭐ My Ratings</div>
-  </div>
-
-  <!-- Rate Photos -->
-  <div class="usec active" id="usec-rate">
-    <div class="rh">
-      <div>
-        <h2>Rate the Faces</h2>
-        <p style="font-size:.78rem;color:var(--text2);margin-top:3px;">Hover a photo and tap stars to rate. Rated photos are hidden automatically.</p>
-      </div>
-      <div class="stat-row">
-        <div class="spill">Rated: <b id="u-rated">0</b></div>
-        <div class="spill">Remaining: <b id="u-rem">0</b></div>
-        <div class="spill">Total: <b id="u-total">0</b></div>
-      </div>
-    </div>
-    <div class="igrid" id="igrid"></div>
-  </div>
-
-  <!-- My Ratings -->
-  <div class="usec" id="usec-myratings">
-    <div class="mrh">
-      <h2>My Ratings</h2>
-      <p>All your submitted ratings. Tap the edit stars to update any rating.</p>
-    </div>
-    <div class="mrgrid" id="mrgrid"></div>
-  </div>
-</div>
-
-<!-- ══════════════ ADMIN ══════════════ -->
-<div class="page" id="page-admin">
-  <div class="admin-wrap">
-    <div class="aside">
-      <h3>Admin Panel</h3>
-      <div class="slink active" id="sl-overview" onclick="switchAP('overview')">📊 Overview</div>
-      <div class="slink"        id="sl-upload"   onclick="switchAP('upload')">📤 Upload Photo</div>
-      <div class="slink"        id="sl-photos"   onclick="switchAP('photos')">🖼 Manage Photos</div>
-      <div class="slink"        id="sl-ratings"  onclick="switchAP('ratings')">⭐ Ratings Data</div>
-      <div class="slink"        id="sl-users"    onclick="switchAP('users')">👥 Users</div>
-    </div>
-    <div class="acont">
-
-      <!-- Overview -->
-      <div class="apanel active" id="ap-overview">
-        <h2>Overview</h2>
-        <div class="sum-cards">
-          <div class="scard"><div class="snum" id="a-photos">0</div><div class="slbl">Total Photos</div></div>
-          <div class="scard"><div class="snum" id="a-ratings">0</div><div class="slbl">Total Ratings</div></div>
-          <div class="scard"><div class="snum" id="a-users">0</div><div class="slbl">Registered Users</div></div>
-          <div class="scard"><div class="snum" id="a-avg">—</div><div class="slbl">Average Rating</div></div>
-        </div>
-        <p style="color:var(--text2);font-size:.84rem;">Welcome, Admin. Use the sidebar to manage content and view rating data.</p>
-      </div>
-
-      <!-- Upload -->
-      <div class="apanel" id="ap-upload">
-        <h2>Upload Photo</h2>
-
-        <!-- DB setup notice -->
-        <div class="db-banner" id="db-notice">
-          <strong>⚠ Database Setup Required</strong>
-          This website uses <strong>localStorage</strong> for now (data is saved in your browser).
-          To make photos available to ALL users across devices, you need to connect a free Firebase database.
-          See the <code>SETUP GUIDE</code> section in the source code, or contact your developer.
-          Until then, photos and user data are stored locally in the current browser only.
-        </div>
-
-        <div class="uform">
-          <div class="fg"><label>Celebrity / Person Name</label><input type="text" id="up-name" placeholder="e.g. Scarlett Johansson"/></div>
-          <div class="fg"><label>Angle / Description</label><input type="text" id="up-angle" placeholder="e.g. Front, Left Side, 45°"/></div>
-          <div class="fg"><label>Select Photo File</label><input type="file" id="up-file" accept="image/*" onchange="prevUpload(this)" style="padding:8px;color:var(--text2);"/></div>
-          <img id="up-prev" class="prev-img"/>
-          <button class="btn-sub" style="width:auto;padding:11px 28px;" onclick="uploadPhoto()">Upload Photo</button>
-          <div class="auth-msg" id="up-msg"></div>
-        </div>
-      </div>
-
-      <!-- Manage -->
-      <div class="apanel" id="ap-photos">
-        <h2>Manage Photos</h2>
-        <div class="pgrid" id="ap-pgrid"></div>
-      </div>
-
-      <!-- Ratings Data -->
-      <div class="apanel" id="ap-ratings">
-        <h2>Ratings Data</h2>
-        <div style="display:flex;gap:9px;margin-bottom:16px;flex-wrap:wrap;">
-          <button class="btn-exp" onclick="expCSV()">⬇ Export CSV</button>
-          <button class="btn-exp" onclick="expExcel()">⬇ Export Excel</button>
-        </div>
-        <div style="overflow-x:auto;">
-          <table class="dtable">
-            <thead><tr><th>Person</th><th>Angle</th><th>User</th><th>Rating</th><th>Date</th></tr></thead>
-            <tbody id="rtbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Users -->
-      <div class="apanel" id="ap-users">
-        <h2>Users</h2>
-        <div style="overflow-x:auto;">
-          <table class="dtable">
-            <thead><tr><th>Username</th><th>Email</th><th>Ratings Submitted</th><th>Joined</th></tr></thead>
-            <tbody id="utbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════════════
-     JAVASCRIPT
-═══════════════════════════════════════════════ -->
-<script>
-/* ═══════════════════════════════════════════
-   DUAL-MODE DATA LAYER
-   • If Firebase is configured → uses Firestore
-   • Otherwise → falls back to localStorage
-   So the site always works, even without Firebase
-═══════════════════════════════════════════ */
-
-const LOCAL = {
-  get: k => { try { return JSON.parse(localStorage.getItem('as_'+k)); } catch(e) { return null; } },
-  set: (k,v) => localStorage.setItem('as_'+k, JSON.stringify(v)),
-  users:  () => LOCAL.get('users')  || {},
-  photos: () => LOCAL.get('photos') || [],
-  ratings:() => LOCAL.get('ratings')|| [],
-};
-
-/* seed admin into localStorage */
-if (!LOCAL.get('admin')) LOCAL.set('admin', { username:'admin', password:'admin123' });
-
-let session = { loggedIn:false, isAdmin:false, username:'' };
-
-/* ═══════════════════════════════════════════
-   PAGE MANAGEMENT
-═══════════════════════════════════════════ */
-function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-'+id).classList.add('active');
-  window.scrollTo(0,0);
-  closeDrawer();
-  if (id === 'landing') updateLandingStats();
-}
-
-function goHome() {
-  if (session.loggedIn && !session.isAdmin) {
-    showPage('rating');
-  } else if (session.loggedIn && session.isAdmin) {
-    showPage('admin');
-  } else {
-    showPage('landing');
-    setNavOut();
-    updateLandingStats();
+document.addEventListener('DOMContentLoaded', async () => {
+  if (USE_FIREBASE=true) {
+    setDbStatus('yellow','Connecting to Firebase…');
+    await initFirebase();
   }
-}
-
-/* ═══════════════════════════════════════════
-   NAV STATE
-═══════════════════════════════════════════ */
-function setNavIn(isAdmin) {
-  const name = session.username;
-  /* desktop */
-  document.getElementById('btn-login').style.display  = 'none';
-  document.getElementById('btn-logout').style.display = 'inline-block';
-  document.getElementById('nav-user-info').textContent = name + (isAdmin?' (Admin)':'');
-  document.getElementById('nav-links').innerHTML = isAdmin
-    ? `<li><a onclick="showPage('admin');loadAdminData()">Dashboard</a></li>`
-    : `<li><a onclick="switchUT('rate')">Rate Photos</a></li><li><a onclick="switchUT('myratings')">My Ratings</a></li>`;
-  /* mobile */
-  document.getElementById('mob-btns').style.display = 'none';
-  const mr = document.getElementById('mob-user-row');
-  mr.style.display = 'flex';
-  document.getElementById('mob-uname').textContent = name + (isAdmin?' (Admin)':'');
-  /* hide landing-only mobile links when logged in as admin */
-  ['ml-golden','ml-how','ml-about'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = isAdmin ? 'none' : '';
-  });
-}
-function setNavOut() {
-  document.getElementById('btn-login').style.display  = 'inline-block';
-  document.getElementById('btn-logout').style.display = 'none';
-  document.getElementById('nav-user-info').textContent = '';
-  document.getElementById('nav-links').innerHTML =
-    `<li><a onclick="navTo('s-golden')">Golden Ratio</a></li>
-     <li><a onclick="navTo('s-how')">How to Rate</a></li>
-     <li><a onclick="navTo('s-about')">About</a></li>`;
-  document.getElementById('mob-btns').style.display = 'flex';
-  document.getElementById('mob-user-row').style.display = 'none';
-  ['ml-golden','ml-how','ml-about'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = '';
-  });
-}
-
-/* ═══════════════════════════════════════════
-   SCROLL / MOBILE DRAWER
-═══════════════════════════════════════════ */
-function navTo(id) {
-  if (!document.getElementById('page-landing').classList.contains('active')) {
-    showPage('landing');
-    setTimeout(() => scrollToId(id), 120);
-  } else {
-    scrollToId(id);
-  }
-}
-function scrollToId(id) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
-}
-function mobNavTo(id) { closeDrawer(); navTo(id); }
-function toggleDrawer() {
-  document.getElementById('ham').classList.toggle('open');
-  document.getElementById('drawer').classList.toggle('open');
-}
-function closeDrawer() {
-  document.getElementById('ham').classList.remove('open');
-  document.getElementById('drawer').classList.remove('open');
-}
-document.addEventListener('click', e => {
-  const d = document.getElementById('drawer');
-  const h = document.getElementById('ham');
-  if (d.classList.contains('open') && !d.contains(e.target) && !h.contains(e.target)) closeDrawer();
-});
-
-/* ═══════════════════════════════════════════
-   AUTH
-═══════════════════════════════════════════ */
-function switchAuthTab(tab) {
-  ['login','register','admin'].forEach(t => {
-    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
-    document.getElementById('auth-'+t).style.display = t===tab ? 'block' : 'none';
-  });
-}
-
-function doLogin() {
-  const u = gv('li-user'), p = gv('li-pass');
-  const msg = document.getElementById('li-msg');
-  if (!u||!p) { showMsg(msg,'Please fill in all fields','err'); return; }
-  const users = LOCAL.users();
-  if (!users[u] || users[u].password !== p) { showMsg(msg,'Invalid username or password','err'); return; }
-  session = { loggedIn:true, isAdmin:false, username:u };
-  setNavIn(false);
-  showPage('rating');
-  switchUT('rate');
-  showToast('Welcome back, '+u+'!');
-}
-
-function doRegister() {
-  const u = gv('rg-user'), e = gv('rg-email'), p = gv('rg-pass'), p2 = gv('rg-pass2');
-  const msg = document.getElementById('rg-msg');
-  if (!u||!p)       { showMsg(msg,'Username and password required','err'); return; }
-  if (p !== p2)     { showMsg(msg,'Passwords do not match','err'); return; }
-  if (u.length < 3) { showMsg(msg,'Username must be at least 3 characters','err'); return; }
-  if (u === 'admin'){ showMsg(msg,'That username is reserved','err'); return; }
-  const users = LOCAL.users();
-  if (users[u])     { showMsg(msg,'Username already taken','err'); return; }
-  users[u] = { password:p, email:e, joined:new Date().toISOString(), ratings:{} };
-  LOCAL.set('users', users);
-  session = { loggedIn:true, isAdmin:false, username:u };
-  setNavIn(false);
-  showPage('rating');
-  switchUT('rate');
-  showToast('Account created! Welcome, '+u+'!');
-}
-
-function doAdminLogin() {
-  const u = gv('ad-user'), p = gv('ad-pass');
-  const msg = document.getElementById('ad-msg');
-  const admin = LOCAL.get('admin') || { username:'admin', password:'admin123' };
-  if (u !== admin.username || p !== admin.password) { showMsg(msg,'Invalid admin credentials','err'); return; }
-  session = { loggedIn:true, isAdmin:true, username:u };
-  setNavIn(true);
-  showPage('admin');
-  loadAdminData();
-  showToast('Admin panel accessed');
-}
-
-function logout() {
-  session = { loggedIn:false, isAdmin:false, username:'' };
-  setNavOut();
-  showPage('landing');
-  showToast('Logged out successfully');
-}
-
-/* ═══════════════════════════════════════════
-   USER TAB SWITCH
-═══════════════════════════════════════════ */
-function switchUT(tab) {
-  if (!session.loggedIn) { showPage('auth'); return; }
-  if (!document.getElementById('page-rating').classList.contains('active')) showPage('rating');
-  document.querySelectorAll('.utab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.usec').forEach(s => s.classList.remove('active'));
-  document.getElementById('utab-'+tab).classList.add('active');
-  document.getElementById('usec-'+tab).classList.add('active');
-  closeDrawer();
-  if (tab === 'rate')      loadRatingGrid();
-  if (tab === 'myratings') loadMyRatings();
-}
-
-/* ═══════════════════════════════════════════
-   SHUFFLE — one random angle per person
-   Each call returns a NEW random selection
-═══════════════════════════════════════════ */
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length-1; i > 0; i--) {
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
-  }
-  return a;
-}
-function getShuffled() {
-  const photos = LOCAL.photos();
-  /* group by normalised person name */
-  const byPerson = {};
-  photos.forEach(p => {
-    const k = p.name.toLowerCase().trim();
-    if (!byPerson[k]) byPerson[k] = [];
-    byPerson[k].push(p);
-  });
-  /* pick ONE random angle per person, then shuffle the whole list */
-  const picked = Object.values(byPerson).map(arr => arr[Math.floor(Math.random()*arr.length)]);
-  return shuffle(picked);
-}
-
-/* ═══════════════════════════════════════════
-   RATING GRID  (only UN-rated photos)
-═══════════════════════════════════════════ */
-function loadRatingGrid() {
-  const all  = getShuffled();
-  const uRat = LOCAL.users()[session.username]?.ratings || {};
-  const unrated = all.filter(p => !(p.id in uRat));
-  const grid = document.getElementById('igrid');
-  grid.innerHTML = '';
-
-  document.getElementById('u-rated').textContent = Object.keys(uRat).length;
-  document.getElementById('u-rem').textContent   = unrated.length;
-  document.getElementById('u-total').textContent = all.length;
-
-  if (all.length === 0) {
-    grid.innerHTML = emptyState('📷','No photos available yet','Check back after the admin uploads some photos.');
-    return;
-  }
-  if (unrated.length === 0) {
-    grid.innerHTML = emptyState('🎉','You\'ve rated all photos!','Visit <strong style="color:var(--accent)">My Ratings</strong> to update any rating.');
-    return;
-  }
-  unrated.forEach(photo => grid.appendChild(makeRateCard(photo)));
-}
-
-function makeRateCard(photo) {
-  const card = document.createElement('div');
-  card.className = 'icard';
-  card.innerHTML = `
-    ${photo.data
-      ? `<img src="${photo.data}" alt="${photo.name}" loading="lazy"/>`
-      : `<div class="pholder"><span>👤</span><small>${photo.name}</small></div>`}
-    <div class="cov">
-      <div class="cname">${photo.name} — ${photo.angle}</div>
-      <div class="srow" id="sr-${photo.id}">
-        ${[1,2,3,4,5].map(s =>
-          `<span class="star" data-v="${s}" data-pid="${photo.id}"
-                 ontouchstart="" onclick="doRate('${photo.id}',${s},this)">★</span>`
-        ).join('')}
-      </div>
-    </div>`;
-  /* desktop hover highlight */
-  const stars = card.querySelectorAll('.star');
-  stars.forEach(star => {
-    star.addEventListener('mouseenter', function() {
-      const v = +this.dataset.v, pid = this.dataset.pid;
-      document.querySelectorAll(`#sr-${pid} .star`).forEach((s,i) => {
-        s.style.color = i < v ? 'var(--star)' : 'var(--star-empty)';
-      });
-    });
-  });
-  card.querySelector('.cov').addEventListener('mouseleave', () => {
-    document.querySelectorAll(`#sr-${photo.id} .star`).forEach(s => s.style.color = 'var(--star-empty)');
-  });
-  return card;
-}
-
-function doRate(photoId, rating, el) {
-  /* save to user profile */
-  const users = LOCAL.users();
-  if (!users[session.username]) return;
-  users[session.username].ratings[photoId] = rating;
-  LOCAL.set('users', users);
-  /* save to global ratings log */
-  const ratings = LOCAL.ratings();
-  const photo   = LOCAL.photos().find(p => p.id === photoId);
-  const idx     = ratings.findIndex(r => r.userId===session.username && r.photoId===photoId);
-  const entry   = { photoId, userId:session.username, rating,
-                    photoName:photo?.name||'?', angle:photo?.angle||'?',
-                    date:new Date().toISOString() };
-  if (idx >= 0) ratings[idx] = entry; else ratings.push(entry);
-  LOCAL.set('ratings', ratings);
-
-  /* flash stars then fade card out */
-  const srow = document.getElementById('sr-'+photoId);
-  if (srow) srow.querySelectorAll('.star').forEach((s,i) => {
-    s.style.color = i < rating ? 'var(--star)' : 'var(--star-empty)';
-    s.classList.toggle('lit', i < rating);
-  });
-  showToast(`${photo?.name||'Photo'} rated ${rating}★`);
-  const card = el.closest('.icard');
-  if (card) {
-    card.style.transition = 'opacity .4s ease, transform .4s ease';
-    card.style.opacity = '0';
-    card.style.transform = 'scale(0.85)';
-    setTimeout(() => { card.remove(); refreshStats(); }, 420);
-  }
-}
-
-function refreshStats() {
-  const uRat = LOCAL.users()[session.username]?.ratings || {};
-  const all  = getShuffled();
-  const unrated = all.filter(p => !(p.id in uRat)).length;
-  document.getElementById('u-rated').textContent = Object.keys(uRat).length;
-  document.getElementById('u-rem').textContent   = unrated;
-  document.getElementById('u-total').textContent = all.length;
-  const grid = document.getElementById('igrid');
-  if (grid && grid.children.length === 0 && unrated === 0) {
-    grid.innerHTML = emptyState('🎉','You\'ve rated all photos!','Visit <strong style="color:var(--accent)">My Ratings</strong> to update any rating.');
-  }
-}
-
-/* ═══════════════════════════════════════════
-   MY RATINGS
-═══════════════════════════════════════════ */
-function loadMyRatings() {
-  const uRat   = LOCAL.users()[session.username]?.ratings || {};
-  const photos = LOCAL.photos();
-  const grid   = document.getElementById('mrgrid');
-  grid.innerHTML = '';
-  const ids = Object.keys(uRat);
-  if (!ids.length) {
-    grid.innerHTML = emptyState('⭐','No ratings yet','Go to <strong style="color:var(--accent)">Rate Photos</strong> to get started.');
-    return;
-  }
-  ids.forEach(pid => {
-    const photo = photos.find(p => p.id === pid);
-    if (!photo) return;
-    const cur = uRat[pid] || 0;
-    const card = document.createElement('div');
-    card.className = 'mycard';
-    card.id = 'mc-'+pid;
-    card.innerHTML = `
-      ${photo.data
-        ? `<img src="${photo.data}" alt="${photo.name}" loading="lazy"/>`
-        : `<div class="pholder" style="position:absolute;inset:0;">👤<small>${photo.name}</small></div>`}
-      <div class="minfo">
-        <div class="mname">${photo.name}</div>
-        <div class="mangle">${photo.angle}</div>
-        <div class="mbig" id="mbig-${pid}">${'★'.repeat(cur)}${'☆'.repeat(5-cur)}</div>
-        <div class="elabel">Update Rating</div>
-        <div class="esrow srow" id="esr-${pid}">
-          ${[1,2,3,4,5].map(s =>
-            `<span class="star${s<=cur?' lit':''}" data-v="${s}" data-pid="${pid}"
-                   ontouchstart="" onclick="doUpdate('${pid}',${s},this)">★</span>`
-          ).join('')}
-        </div>
-      </div>`;
-    const stars = card.querySelectorAll('.star');
-    stars.forEach(star => {
-      star.addEventListener('mouseenter', function() {
-        const v = +this.dataset.v, pid2 = this.dataset.pid;
-        document.querySelectorAll(`#esr-${pid2} .star`).forEach((s,i) => {
-          s.style.color = i < v ? 'var(--star)' : 'var(--star-empty)';
-        });
-      });
-    });
-    card.querySelector('.minfo').addEventListener('mouseleave', () => {
-      const c = LOCAL.users()[session.username]?.ratings[pid] || 0;
-      document.querySelectorAll(`#esr-${pid} .star`).forEach((s,i) => {
-        s.style.color = i < c ? 'var(--star)' : 'var(--star-empty)';
-      });
-    });
-    grid.appendChild(card);
-  });
-}
-
-function doUpdate(photoId, rating, el) {
-  const users = LOCAL.users();
-  if (!users[session.username]) return;
-  users[session.username].ratings[photoId] = rating;
-  LOCAL.set('users', users);
-  const ratings = LOCAL.ratings();
-  const photo   = LOCAL.photos().find(p => p.id === photoId);
-  const idx     = ratings.findIndex(r => r.userId===session.username && r.photoId===photoId);
-  const entry   = { photoId, userId:session.username, rating,
-                    photoName:photo?.name||'?', angle:photo?.angle||'?',
-                    date:new Date().toISOString() };
-  if (idx >= 0) ratings[idx] = entry; else ratings.push(entry);
-  LOCAL.set('ratings', ratings);
-  el.parentElement.querySelectorAll('.star').forEach((s,i) => {
-    s.style.color = i < rating ? 'var(--star)' : 'var(--star-empty)';
-    s.classList.toggle('lit', i < rating);
-  });
-  const big = document.getElementById('mbig-'+photoId);
-  if (big) big.textContent = '★'.repeat(rating)+'☆'.repeat(5-rating);
-  showToast(`Updated to ${rating}★`);
-}
-
-/* ═══════════════════════════════════════════
-   ADMIN PANEL
-═══════════════════════════════════════════ */
-function switchAP(id) {
-  document.querySelectorAll('.apanel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.slink').forEach(l => l.classList.remove('active'));
-  document.getElementById('ap-'+id).classList.add('active');
-  document.getElementById('sl-'+id).classList.add('active');
-  if (id==='photos')  renderAdminPhotos();
-  if (id==='ratings') renderRatings();
-  if (id==='users')   renderUsers();
-  if (id==='overview') updateOverview();
-}
-function loadAdminData() { updateOverview(); }
-
-function updateOverview() {
-  const photos  = LOCAL.photos();
-  const ratings = LOCAL.ratings();
-  const users   = LOCAL.users();
-  document.getElementById('a-photos').textContent  = photos.length;
-  document.getElementById('a-ratings').textContent = ratings.length;
-  document.getElementById('a-users').textContent   = Object.keys(users).length;
-  const avg = ratings.length
-    ? (ratings.reduce((a,r)=>a+r.rating,0)/ratings.length).toFixed(2) : '—';
-  document.getElementById('a-avg').textContent = avg;
-}
-
-/* upload */
-function prevUpload(input) {
-  const img = document.getElementById('up-prev');
-  if (input.files[0]) {
-    const r = new FileReader();
-    r.onload = e => { img.src = e.target.result; img.style.display = 'block'; };
-    r.readAsDataURL(input.files[0]);
-  }
-}
-function uploadPhoto() {
-  const name  = gv('up-name');
-  const angle = gv('up-angle') || 'Front';
-  const file  = document.getElementById('up-file').files[0];
-  const msg   = document.getElementById('up-msg');
-  if (!name) { showMsg(msg,'Please enter a person name','err'); return; }
-  if (!file) { showMsg(msg,'Please select a photo file','err'); return; }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const photos = LOCAL.photos();
-    const id = 'p'+Date.now()+Math.random().toString(36).substr(2,4);
-    photos.push({ id, name:name.trim(), angle:angle.trim(), data:e.target.result, uploadedAt:new Date().toISOString() });
-    LOCAL.set('photos', photos);
-    gv; // flush
-    document.getElementById('up-name').value  = '';
-    document.getElementById('up-angle').value = '';
-    document.getElementById('up-file').value  = '';
-    document.getElementById('up-prev').style.display = 'none';
-    showMsg(msg, `✓ "${name}" (${angle}) uploaded!`, 'ok');
-    updateOverview();
-    updateLandingStats();
-    showToast('Photo uploaded successfully!');
-  };
-  reader.readAsDataURL(file);
-}
-
-function renderAdminPhotos() {
-  const photos = LOCAL.photos();
-  const grid   = document.getElementById('ap-pgrid');
-  grid.innerHTML = '';
-  if (!photos.length) {
-    grid.innerHTML = '<p style="color:var(--text2);font-size:.84rem;">No photos uploaded yet.</p>';
-    return;
-  }
-  photos.forEach(photo => {
-    const card = document.createElement('div');
-    card.className = 'pcard';
-    card.innerHTML = `
-      ${photo.data ? `<img src="${photo.data}" alt="${photo.name}"/>` : `<div class="pholder" style="position:absolute;inset:0;font-size:1.6rem;">👤</div>`}
-      <button class="delbtn" onclick="deletePhoto('${photo.id}')">✕</button>
-      <div class="clabel">${photo.name} — ${photo.angle}</div>`;
-    grid.appendChild(card);
-  });
-}
-
-function deletePhoto(id) {
-  if (!confirm('Delete this photo? All its ratings will also be removed.')) return;
-  LOCAL.set('photos',  LOCAL.photos().filter(p => p.id !== id));
-  LOCAL.set('ratings', LOCAL.ratings().filter(r => r.photoId !== id));
-  const users = LOCAL.users();
-  Object.keys(users).forEach(u => { delete users[u].ratings[id]; });
-  LOCAL.set('users', users);
-  renderAdminPhotos();
-  updateOverview();
-  updateLandingStats();
-  showToast('Photo deleted');
-}
-
-function renderRatings() {
-  const ratings = LOCAL.ratings();
-  const tbody   = document.getElementById('rtbody');
-  tbody.innerHTML = '';
-  if (!ratings.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:28px;">No ratings yet</td></tr>';
-    return;
-  }
-  /* newest first */
-  [...ratings].reverse().forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.photoName}</td><td>${r.angle}</td><td>${r.userId}</td>
-      <td><span class="starsdisp">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span> ${r.rating}/5</td>
-      <td style="font-size:.74rem;color:var(--text3)">${new Date(r.date).toLocaleDateString()}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderUsers() {
-  const users = LOCAL.users();
-  const tbody = document.getElementById('utbody');
-  tbody.innerHTML = '';
-  const entries = Object.entries(users);
-  if (!entries.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text3);padding:28px;">No users yet</td></tr>';
-    return;
-  }
-  entries.forEach(([u, data]) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${u}</td><td style="color:var(--text3)">${data.email||'—'}</td>
-      <td>${Object.keys(data.ratings||{}).length}</td>
-      <td style="font-size:.74rem;color:var(--text3)">${data.joined?new Date(data.joined).toLocaleDateString():'—'}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-/* ═══════════════════════════════════════════
-   EXPORT
-═══════════════════════════════════════════ */
-function expCSV() {
-  const ratings = LOCAL.ratings();
-  if (!ratings.length) { showToast('No ratings to export'); return; }
-  const rows = [['Person','Angle','User','Rating','Date'],
-    ...ratings.map(r => [r.photoName, r.angle, r.userId, r.rating, new Date(r.date).toLocaleDateString()])];
-  dlFile('aura_ratings.csv', rows.map(r => r.map(c=>`"${c}"`).join(',')).join('\n'), 'text/csv');
-  showToast('CSV exported!');
-}
-function expExcel() {
-  const ratings = LOCAL.ratings();
-  if (!ratings.length) { showToast('No ratings to export'); return; }
-  let html = '<table><tr><th>Person</th><th>Angle</th><th>User</th><th>Rating</th><th>Date</th></tr>';
-  ratings.forEach(r => {
-    html += `<tr><td>${r.photoName}</td><td>${r.angle}</td><td>${r.userId}</td><td>${r.rating}</td><td>${new Date(r.date).toLocaleDateString()}</td></tr>`;
-  });
-  dlFile('aura_ratings.xls', '\ufeff'+html+'</table>', 'application/vnd.ms-excel');
-  showToast('Excel exported!');
-}
-function dlFile(name, content, type) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content],{type}));
-  a.download = name; a.click();
-}
-
-/* ═══════════════════════════════════════════
-   LANDING STATS
-═══════════════════════════════════════════ */
-function updateLandingStats() {
-  document.getElementById('stat-photos').textContent  = LOCAL.photos().length;
-  document.getElementById('stat-ratings').textContent = LOCAL.ratings().length;
-  document.getElementById('stat-users').textContent   = Object.keys(LOCAL.users()).length;
-}
-
-/* ═══════════════════════════════════════════
-   HELPERS
-═══════════════════════════════════════════ */
-const gv = id => document.getElementById(id)?.value.trim() || '';
-function showMsg(el, msg, cls) { el.textContent = msg; el.className = 'auth-msg '+(cls||''); }
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2800);
-}
-function emptyState(icon, title, sub) {
-  return `<div style="grid-column:1/-1;text-align:center;padding:72px 20px;color:var(--text3);">
-    <div style="font-size:2.8rem;margin-bottom:14px;">${icon}</div>
-    <p style="font-size:.97rem;color:var(--text2);margin-bottom:6px;">${title}</p>
-    <p style="font-size:.8rem;">${sub}</p></div>`;
-}
-
-/* init */
-document.addEventListener('DOMContentLoaded', () => {
   updateLandingStats();
 });
 </script>
-
-<!-- ═══════════════════════════════════════════════════════════
-     DATABASE SETUP GUIDE
-     ═══════════════════════════════════════════════════════════
-
-  CURRENT STATE:
-  The website works 100% right now using your BROWSER'S localStorage.
-  That means photos, users, and ratings are saved inside the browser
-  that opened the website. If you open a different browser or device,
-  it will be a fresh database.
-
-  TO MAKE IT MULTI-USER (all users see admin's photos):
-
-  OPTION A — Firebase (Free, easiest, no server)
-  ───────────────────────────────────────────────
-  1. Go to https://console.firebase.google.com
-  2. Click "Add project" → name it → disable Analytics → Create
-  3. Left sidebar → Build → Firestore Database → Create database
-     → Start in TEST MODE → choose a region → Done
-  4. Left sidebar → Build → Storage → Get started → Test mode → Done
-  5. Click the gear ⚙ icon → Project Settings → General tab
-     → Scroll to "Your apps" → click </> (Web)
-     → Register app → copy the firebaseConfig object
-  6. Replace the firebaseConfig at the top of this HTML file
-  7. Upload this file to any web host (Netlify, Vercel, GitHub Pages)
-  8. Done! All users now share the same database.
-
-  OPTION B — Supabase (Free PostgreSQL, slightly more setup)
-  OPTION C — Your university's server with PHP + MySQL
-
-  If you need help, share the project with a web developer and
-  point them to this comment.
-
-════════════════════════════════════════════════════════════ -->
 </body>
 </html>
